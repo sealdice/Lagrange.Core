@@ -18,9 +18,6 @@ jobs:
             linux-arm64,
             osx-x64,
             osx-arm64,
-            linux-musl-x64,
-            linux-musl-arm,
-            linux-musl-arm64,
           ]
 
     steps:
@@ -44,6 +41,27 @@ jobs:
 
       - name: Compress files
         run: Compress-Archive -Path 'Lagrange.OneBot\bin\Release\net8.0\${{ matrix.runtimeIdentifier }}\publish' -DestinationPath 'Lagrange.OneBot_${{ matrix.runtimeIdentifier }}_8.0.zip'
+
+      - name: dir
+        run: dir 'Lagrange.OneBot\bin\Release\net8.0\${{ matrix.runtimeIdentifier }}\publish\'
+
+      - name: Rename
+        if: matrix.runtimeIdentifier == 'win-x64' || matrix.runtimeIdentifier == 'win-x86'
+        run: move 'Lagrange.OneBot\bin\Release\net8.0\${{ matrix.runtimeIdentifier }}\publish\Lagrange.OneBot.exe' 'Lagrange.OneBot\bin\Release\net8.0\${{ matrix.runtimeIdentifier }}\publish\Lagrange.OneBot_${{ matrix.runtimeIdentifier }}.exe'
+
+      - name: Rename
+        if: matrix.runtimeIdentifier != 'win-x64' && matrix.runtimeIdentifier != 'win-x86'
+        run: move 'Lagrange.OneBot\bin\Release\net8.0\${{ matrix.runtimeIdentifier }}\publish\Lagrange.OneBot' 'Lagrange.OneBot\bin\Release\net8.0\${{ matrix.runtimeIdentifier }}\publish\Lagrange.OneBot_${{ matrix.runtimeIdentifier }}'
+
+      - uses: fy0/r2-upload-action@1.4
+        continue-on-error: true
+        with:
+          r2-account-id: ${{ secrets.R2_ACCOUNT_ID }}
+          r2-access-key-id: ${{ secrets.R2_ACCESS_KEY_ID }}
+          r2-secret-access-key: ${{ secrets.R2_SECRET_ACCESS_KEY }}
+          r2-bucket: ${{ secrets.R2_BUCKET }}
+          source-dir: Lagrange.OneBot/bin/Release/net8.0/${{ matrix.runtimeIdentifier }}/publish/
+          destination-dir: ./lagrange/
 
       - name: Prepare release files
         uses: actions/upload-artifact@v3
