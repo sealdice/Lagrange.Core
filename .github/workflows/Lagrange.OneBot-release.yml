@@ -40,18 +40,23 @@ jobs:
           path: Lagrange.OneBot/bin/Release/net8.0/${{ matrix.runtimeIdentifier }}/publish
 
       - name: Compress files
-        run: Compress-Archive -Path 'Lagrange.OneBot\bin\Release\net8.0\${{ matrix.runtimeIdentifier }}\publish' -DestinationPath 'Lagrange.OneBot_${{ matrix.runtimeIdentifier }}_8.0.zip'
+        run: Compress-Archive -Path 'Lagrange.OneBot\bin\Release\net8.0\${{ matrix.runtimeIdentifier }}\publish\*' -DestinationPath 'Lagrange.OneBot_${{ matrix.runtimeIdentifier }}_8.0.zip'
 
       - name: dir
         run: dir 'Lagrange.OneBot\bin\Release\net8.0\${{ matrix.runtimeIdentifier }}\publish\'
 
       - name: Rename
-        if: matrix.runtimeIdentifier == 'win-x64' || matrix.runtimeIdentifier == 'win-x86'
-        run: move 'Lagrange.OneBot\bin\Release\net8.0\${{ matrix.runtimeIdentifier }}\publish\Lagrange.OneBot.exe' 'Lagrange.OneBot\bin\Release\net8.0\${{ matrix.runtimeIdentifier }}\publish\Lagrange.OneBot_${{ matrix.runtimeIdentifier }}.exe'
+        run: |
+          mkdir upload
+          copy 'Lagrange.OneBot_${{ matrix.runtimeIdentifier }}_8.0.zip' 'upload/Lagrange.OneBot_${{ matrix.runtimeIdentifier }}_8.0.zip'
 
-      - name: Rename
-        if: matrix.runtimeIdentifier != 'win-x64' && matrix.runtimeIdentifier != 'win-x86'
-        run: move 'Lagrange.OneBot\bin\Release\net8.0\${{ matrix.runtimeIdentifier }}\publish\Lagrange.OneBot' 'Lagrange.OneBot\bin\Release\net8.0\${{ matrix.runtimeIdentifier }}\publish\Lagrange.OneBot_${{ matrix.runtimeIdentifier }}'
+      # - name: Rename
+      #   if: matrix.runtimeIdentifier == 'win-x64' || matrix.runtimeIdentifier == 'win-x86'
+      #   run: move 'Lagrange.OneBot\bin\Release\net8.0\${{ matrix.runtimeIdentifier }}\publish\Lagrange.OneBot.exe' 'Lagrange.OneBot\bin\Release\net8.0\${{ matrix.runtimeIdentifier }}\publish\Lagrange.OneBot_${{ matrix.runtimeIdentifier }}.exe'
+
+      # - name: Rename
+      #   if: matrix.runtimeIdentifier != 'win-x64' && matrix.runtimeIdentifier != 'win-x86'
+      #   run: move 'Lagrange.OneBot\bin\Release\net8.0\${{ matrix.runtimeIdentifier }}\publish\Lagrange.OneBot' 'Lagrange.OneBot\bin\Release\net8.0\${{ matrix.runtimeIdentifier }}\publish\Lagrange.OneBot_${{ matrix.runtimeIdentifier }}'
 
       - uses: fy0/r2-upload-action@1.4
         continue-on-error: true
@@ -60,7 +65,7 @@ jobs:
           r2-access-key-id: ${{ secrets.R2_ACCESS_KEY_ID }}
           r2-secret-access-key: ${{ secrets.R2_SECRET_ACCESS_KEY }}
           r2-bucket: ${{ secrets.R2_BUCKET }}
-          source-dir: Lagrange.OneBot/bin/Release/net8.0/${{ matrix.runtimeIdentifier }}/publish/
+          source-dir: upload
           destination-dir: ./lagrange/
 
       - name: Prepare release files
@@ -93,6 +98,12 @@ jobs:
         run: |
           dotnet publish Lagrange.OneBot/Lagrange.OneBot.csproj --self-contained -p:PublishSingleFile=false -p:IncludeNativeLibrariesForSelfExtract=true -p:DebugType=none -p:RuntimeIdentifier=${{ matrix.runtimeIdentifier }} --framework net8.0
 
+      - name: Copy Libraries
+        run: Copy-Item -Path 'Vendors\${{ matrix.runtimeIdentifier }}\*' -Destination "Lagrange.OneBot\bin\Release\net8.0\${{ matrix.runtimeIdentifier }}\publish\" -Recurse -Force
+
+      - name: dir
+        run: dir 'Lagrange.OneBot\bin\Release\net8.0\${{ matrix.runtimeIdentifier }}\publish\'
+
       - name: Upload binary files(${{ matrix.runtimeIdentifier }}) for .NET 8.0
         uses: actions/upload-artifact@v3
         with:
@@ -100,10 +111,7 @@ jobs:
           path: Lagrange.OneBot/bin/Release/net8.0/${{ matrix.runtimeIdentifier }}/publish
 
       - name: Compress files
-        run: Compress-Archive -Path 'Lagrange.OneBot\bin\Release\net8.0\${{ matrix.runtimeIdentifier }}\publish' -DestinationPath 'Lagrange.OneBot_${{ matrix.runtimeIdentifier }}_8.0.zip'
-
-      - name: dir
-        run: dir 'Lagrange.OneBot\bin\Release\net8.0\${{ matrix.runtimeIdentifier }}\publish\'
+        run: Compress-Archive -Path 'Lagrange.OneBot\bin\Release\net8.0\${{ matrix.runtimeIdentifier }}\publish\*' -DestinationPath 'Lagrange.OneBot_${{ matrix.runtimeIdentifier }}_8.0.zip'
 
       - name: Rename
         if: matrix.runtimeIdentifier != 'win-x64' && matrix.runtimeIdentifier != 'win-x86'
