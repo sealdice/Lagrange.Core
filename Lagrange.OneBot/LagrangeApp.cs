@@ -89,9 +89,11 @@ public class LagrangeApp : IHost
 
             if (await Instance.FetchQrCode() is { } qrCode)
             {
-                QrCodeHelper.Output(qrCode.Url ?? "", Configuration.GetValue<bool>("QrCode:ConsoleCompatibilityMode"));
+                Logger.LogInformation("[X] before qrcode output");
+                // QrCodeHelper.Output(qrCode.Url ?? "", Configuration.GetValue<bool>("QrCode:ConsoleCompatibilityMode"));
                 await File.WriteAllBytesAsync($"qr-{Instance.BotUin}.png", qrCode.QrCode ?? Array.Empty<byte>(), cancellationToken);
                 
+                Logger.LogInformation("[X] qrcode written, to LoginByQrCode");
                 _ = Task.Run(Instance.LoginByQrCode, cancellationToken);
             }
         }
