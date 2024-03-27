@@ -91,8 +91,6 @@ internal class WtExchangeLogic : LogicBase
     {
         Collection.Scheduler.Interval(QueryEvent, 2 * 1000, async () => await QueryTransEmpState(async @event =>
         {
-            Collection.Log.LogInfo(Tag, "[X] QrCode Login start");
-
             if (@event.TgtgtKey != null)
             {
                 Collection.Keystore.Stub.TgtgtKey = @event.TgtgtKey;
@@ -345,11 +343,8 @@ internal class WtExchangeLogic : LogicBase
 
     private async Task QueryTransEmpState(Func<TransEmpEvent, Task<bool>> callback)
     {
-        Collection.Log.LogInfo(Tag, "[X] QueryTransEmpState start");
-
         if (Collection.Keystore.Session.QrString != null)
         {
-            Collection.Log.LogInfo(Tag, "[X] QueryTransEmpState branch 1");
 
             var request = new NTLoginHttpRequest
             {
@@ -358,27 +353,20 @@ internal class WtExchangeLogic : LogicBase
                 FaceUpdateTime = 0
             };
             
-            Collection.Log.LogInfo(Tag, "[X] QueryTransEmpState branch 1 1");
             var payload = JsonSerializer.SerializeToUtf8Bytes(request);
-            Collection.Log.LogInfo(Tag, "[X] QueryTransEmpState branch 1 2");
             var response = await Http.PostAsync(Interface, payload, "application/json");
-            Collection.Log.LogInfo(Tag, "[X] QueryTransEmpState branch 1 3");
             var info = JsonSerializer.Deserialize<NTLoginHttpResponse>(response);
-            Collection.Log.LogInfo(Tag, "[X] QueryTransEmpState branch 1 4");
             if (info != null) Collection.Keystore.Uin = info.Uin;
         }
 
-        Collection.Log.LogInfo(Tag, "[X] QueryTransEmpState branch 0");
         var transEmp = TransEmpEvent.Create(TransEmpEvent.State.QueryResult);
         var result = await Collection.Business.SendEvent(transEmp);
 
         if (result.Count != 0)
         {
-            Collection.Log.LogInfo(Tag, "[X] QueryTransEmpState branch 2");
             var @event = (TransEmpEvent)result[0];
             var state = (TransEmp12.State)@event.ResultCode;
             Collection.Log.LogInfo(Tag, $"QrCode State Queried: {state} Uin: {Collection.Keystore.Uin}");
-            Collection.Log.LogInfo(Tag, "[X] QueryTransEmpState branch 2 2");
 
             switch (state)
             {

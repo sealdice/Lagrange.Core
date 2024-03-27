@@ -16,6 +16,9 @@ jobs:
             linux-x64,
             linux-arm,
             linux-arm64,
+            linux-musl-x64,
+            linux-musl-arm,
+            linux-musl-arm64,
             osx-x64,
             osx-arm64,
           ]
