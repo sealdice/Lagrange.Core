@@ -47,11 +47,11 @@ public sealed partial class ForwardWSService : ILagrangeWebService
     public Task StartAsync(CancellationToken cancellationToken)
     {
         uint port = _options.Port;
-        if (IsPortInUse(port))
-        {
-            Log.LogPortInUse(_logger, port);
-            return Task.CompletedTask;
-        }
+        // if (IsPortInUse(port))
+        // {
+        //     Log.LogPortInUse(_logger, port);
+        //     return Task.CompletedTask;
+        // }
 
         return Task.Run(() =>
         {

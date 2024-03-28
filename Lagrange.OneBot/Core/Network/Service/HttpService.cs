@@ -36,11 +36,11 @@ public sealed partial class HttpService : ILagrangeWebService
     public Task StartAsync(CancellationToken cancellationToken)
     {
         uint port = _options.Port;
-        if (IsPortInUse(port))
-        {
-            Log.LogPortInUse(_logger, port);
-            return Task.CompletedTask;
-        }
+        // if (IsPortInUse(port))
+        // {
+        //     Log.LogPortInUse(_logger, port);
+        //     return Task.CompletedTask;
+        // }
 
         Task.Run(() =>
         {
