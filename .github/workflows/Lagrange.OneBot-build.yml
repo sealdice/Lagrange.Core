@@ -46,6 +46,12 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: Set secret
+        env:
+          MY_ENV_VAR: ${{ secrets.KEY }}
+        run: |
+          sed -i 's#$(SIGN_SERVER_DEFAULT)#'"${MY_ENV_VAR}"'#g' 'Lagrange.OneBot/Utility/OneBotSigner.cs'
+
       - name: Install .NET
         uses: actions/setup-dotnet@v4
         with:

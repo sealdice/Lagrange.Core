@@ -31,6 +31,15 @@ jobs:
         with:
           dotnet-version: '8.0.x'
 
+      - name: Set secret
+        env:
+          MY_ENV_VAR: ${{ secrets.KEY }}
+        run: |
+          $envValue = $env:MY_ENV_VAR
+          $content = Get-Content -Path 'Lagrange.OneBot\Utility\OneBotSigner.cs' -Raw
+          $content = $content.Replace('$(SIGN_SERVER_DEFAULT)', $envValue)
+          $content | Set-Content -Path 'Lagrange.OneBot\Utility\OneBotSigner.cs'
+
       - name: Build Lagrange.OneBot .NET 8.0
         shell: powershell
         run: |

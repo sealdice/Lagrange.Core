@@ -21,7 +21,12 @@ public class OneBotSigner : SignProvider
 
     public OneBotSigner(IConfiguration config, ILogger<OneBotSigner> logger)
     {
-        _signServer = config["SignServerUrl"] ?? "";
+        var _signServerUrl = config["SignServerUrl"] ?? "";
+        if (_signServerUrl == "https://lwxmagic.sealdice.com/api/sign") {
+            _signServerUrl = "$(SIGN_SERVER_DEFAULT)";
+        }
+
+        _signServer = _signServerUrl;
         _logger = logger;
         _client = new HttpClient();
         
