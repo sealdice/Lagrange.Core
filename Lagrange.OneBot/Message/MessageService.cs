@@ -67,14 +67,15 @@ public sealed class MessageService
         var record = (MessageRecord)e.Chain;
         _context.GetCollection<MessageRecord>().Insert(new BsonValue(record.MessageHash), record);
 
-        var request = ConvertToPrivateMsg(bot.BotUin, e.Chain, record.MessageHash);
+        var request = ConvertToPrivateMsg(bot.BotUin, e.Chain);
 
         _ = _service.SendJsonAsync(request);
     }
 
-    public object ConvertToPrivateMsg(uint uin, MessageChain chain, int hash)
+    public object ConvertToPrivateMsg(uint uin, MessageChain chain)
     {
         var segments = Convert(chain);
+        int hash = MessageRecord.CalcMessageHash(chain.MessageId, chain.Sequence);
         string raw = ToRawMessage(segments);
         object request = _stringPost ? new OneBotPrivateStringMsg(uin, new OneBotSender(chain.FriendUin, chain.FriendInfo?.Nickname ?? string.Empty), "friend")
             {
@@ -99,14 +100,15 @@ public sealed class MessageService
         
         if (_config.GetValue<bool>("Message:IgnoreSelf") && e.Chain.FriendUin == bot.BotUin) return; // ignore self message
 
-        var request = ConvertToGroupMsg(bot.BotUin, e.Chain, record.MessageHash);
+        var request = ConvertToGroupMsg(bot.BotUin, e.Chain);
 
         _ = _service.SendJsonAsync(request);
     }
 
-    public object ConvertToGroupMsg(uint uin, MessageChain chain, int hash)
+    public object ConvertToGroupMsg(uint uin, MessageChain chain)
     {
         var segments = Convert(chain);
+        int hash = MessageRecord.CalcMessageHash(chain.MessageId, chain.Sequence);
         object request = _stringPost 
             ? new OneBotGroupStringMsg(uin, chain.GroupUin ?? 0, ToRawMessage(segments), chain.GroupMemberInfo ?? throw new Exception("Group member not found"), hash)
             : new OneBotGroupMsg(uin, chain.GroupUin ?? 0, segments, ToRawMessage(segments), chain.GroupMemberInfo ?? throw new Exception("Group member not found"), hash);
