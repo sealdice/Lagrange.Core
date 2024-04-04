@@ -42,8 +42,7 @@ jobs:
 
       - name: Build Lagrange.OneBot .NET 8.0
         shell: powershell
-        run: |
-          dotnet publish Lagrange.OneBot/Lagrange.OneBot.csproj --self-contained -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true -p:DebugType=none -p:RuntimeIdentifier=${{ matrix.runtimeIdentifier }} --framework net8.0
+        run: dotnet publish Lagrange.OneBot/Lagrange.OneBot.csproj --self-contained -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true -p:DebugType=none -p:RuntimeIdentifier=${{ matrix.runtimeIdentifier }} --framework net8.0
 
       - name: Upload binary files(${{ matrix.runtimeIdentifier }}) for .NET 8.0
         uses: actions/upload-artifact@v3
@@ -61,6 +60,25 @@ jobs:
         run: |
           mkdir upload
           copy 'Lagrange.OneBot_${{ matrix.runtimeIdentifier }}_8.0.zip' 'upload/Lagrange.OneBot_${{ matrix.runtimeIdentifier }}_8.0.zip'
+
+      - name: Build Lagrange.OneBot .NET 7.0
+        run: dotnet publish Lagrange.OneBot/Lagrange.OneBot.csproj --self-contained -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true -p:DebugType=none -p:RuntimeIdentifier=${{ matrix.runtimeIdentifier }} --framework net7.0
+
+      - name: Upload binary files(${{ matrix.runtimeIdentifier }}) for .NET 7.0
+        uses: actions/upload-artifact@v3
+        with:
+          name: Lagrange.OneBot_${{ matrix.runtimeIdentifier }}_8.0
+          path: Lagrange.OneBot/bin/Debug/net7.0/${{ matrix.runtimeIdentifier }}/publish
+
+      - name: Compress files .NET 7.0
+        run: Compress-Archive -Path 'Lagrange.OneBot\bin\Debug\net7.0\${{ matrix.runtimeIdentifier }}\publish\*' -DestinationPath 'Lagrange.OneBot_${{ matrix.runtimeIdentifier }}_7.0.zip'
+
+      - name: dir
+        run: dir 'Lagrange.OneBot\bin\Debug\net7.0\${{ matrix.runtimeIdentifier }}\publish\'
+
+      - name: Rename .NET 7.0
+        run: |
+          copy 'Lagrange.OneBot_${{ matrix.runtimeIdentifier }}_7.0.zip' 'upload/Lagrange.OneBot_${{ matrix.runtimeIdentifier }}_7.0.zip'
 
       # - name: Rename
       #   if: matrix.runtimeIdentifier == 'win-x64' || matrix.runtimeIdentifier == 'win-x86'
