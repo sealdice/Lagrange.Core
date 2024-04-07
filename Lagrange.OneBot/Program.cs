@@ -1,7 +1,10 @@
 using System.Reflection;
 using System.Runtime;
 using System.Text;
+using System.CommandLine;
+using System.CommandLine.Invocation;
 using Microsoft.Extensions.Hosting;
+
 
 namespace Lagrange.OneBot;
 
@@ -13,6 +16,16 @@ internal abstract class Program
         Console.InputEncoding = Encoding.UTF8;
 
         GCSettings.LatencyMode = GCLatencyMode.Batch;
+
+        if (!(args.Length > 0 && args[0] == "")) {
+            // 跳过空参数
+            var rootCommand = new RootCommand();
+            rootCommand.Invoke(args);
+
+            if (args.Length > 0) {
+                Environment.Exit(0);
+            }
+        }
 
         if (!File.Exists("appsettings.json"))
         {
