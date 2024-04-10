@@ -65,7 +65,7 @@ public sealed class OperationService
                 }
                 catch (Exception ex)
                 {
-                    _logger.LogWarning(ex, "Unexpected error encountered while handling message.");
+                    _logger.LogError(ex, "Unexpected error encountered while handling message.");
                     return new OneBotResult(null, 200, "failed") { Echo = action.Echo };
                 }
             }

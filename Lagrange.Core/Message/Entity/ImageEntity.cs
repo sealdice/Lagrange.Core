@@ -42,7 +42,7 @@ public class ImageEntity : IMessageEntity
     public ImageEntity(string filePath)
     {
         FilePath = filePath;
-        ImageStream = new FileStream(filePath, FileMode.Open, FileAccess.Read);
+        ImageStream = new FileStream(filePath, FileMode.Open, FileAccess.Read, FileShare.Read);
     }
 
     public ImageEntity(byte[] file)

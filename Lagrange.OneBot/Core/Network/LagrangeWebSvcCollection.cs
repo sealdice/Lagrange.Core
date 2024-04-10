@@ -70,6 +70,7 @@ public sealed partial class LagrangeWebSvcCollection(IServiceProvider services, 
             {
                 Log.LogWebServiceStartFailed(logger, e, Tag);
                 scope.Dispose();
+                Environment.Exit(-1001);
             }
         }
     }
