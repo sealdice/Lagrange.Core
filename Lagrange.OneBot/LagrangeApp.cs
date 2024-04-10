@@ -89,7 +89,7 @@ public class LagrangeApp : IHost
 
             if (await Instance.FetchQrCode() is { } qrCode)
             {
-                QrCodeHelper.Output(qrCode.Url ?? "", Configuration.GetValue<bool>("QrCode:ConsoleCompatibilityMode"));
+                // QrCodeHelper.Output(qrCode.Url ?? "", Configuration.GetValue<bool>("QrCode:ConsoleCompatibilityMode"));
                 await File.WriteAllBytesAsync($"qr-{Instance.BotUin}.png", qrCode.QrCode ?? Array.Empty<byte>(), cancellationToken);
                 
                 Logger.LogInformation($"[X] qrcode file generated: qr-{Instance.BotUin}.png");
