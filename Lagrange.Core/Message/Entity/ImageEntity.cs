@@ -25,7 +25,7 @@ public class ImageEntity : IMessageEntity
 
     public string ImageUrl { get; set; } = string.Empty;
 
-    internal Stream? ImageStream { get; set; }
+    internal Lazy<Stream>? ImageStream { get; set; }
 
     internal string? Path { get; set; }
 
@@ -37,18 +37,28 @@ public class ImageEntity : IMessageEntity
 
     internal CustomFace? CompatFace { get; set; }
 
+    internal string? Summary { get; set; }
+    
+    internal int SubType { get; set; }
+
     public ImageEntity() { }
 
     public ImageEntity(string filePath)
     {
         FilePath = filePath;
-        ImageStream = new FileStream(filePath, FileMode.Open, FileAccess.Read, FileShare.Read);
+        ImageStream = new Lazy<Stream>(() => new FileStream(filePath, FileMode.Open, FileAccess.Read));
     }
 
     public ImageEntity(byte[] file)
     {
         FilePath = "";
-        ImageStream = new MemoryStream(file);
+        ImageStream = new Lazy<Stream>(() => new MemoryStream(file));
+    }
+    
+    public ImageEntity(Stream stream)
+    {
+        FilePath = "";
+        ImageStream = new Lazy<Stream>(stream);
     }
 
     IEnumerable<Elem> IMessageEntity.PackElement()
@@ -86,7 +96,9 @@ public class ImageEntity : IMessageEntity
                     PictureSize = new Vector2(image.PicWidth, image.PicHeight),
                     FilePath = image.FilePath,
                     ImageSize = image.FileLen,
-                    ImageUrl = $"{BaseUrl}{image.OrigUrl}"
+                    ImageUrl = $"{BaseUrl}{image.OrigUrl}",
+                    Summary = image.PbRes.Summary,
+                    SubType = image.PbRes.SubType
                 };
 
             }
@@ -96,7 +108,9 @@ public class ImageEntity : IMessageEntity
                 PictureSize = new Vector2(image.PicWidth, image.PicHeight),
                 FilePath = image.FilePath,
                 ImageSize = image.FileLen,
-                ImageUrl = $"{LegacyBaseUrl}{image.OrigUrl}"
+                ImageUrl = $"{LegacyBaseUrl}{image.OrigUrl}",
+                Summary = image.PbRes.Summary,
+                SubType = image.PbRes.SubType
             };
         }
 
@@ -109,7 +123,9 @@ public class ImageEntity : IMessageEntity
                     PictureSize = new Vector2(face.Width, face.Height),
                     FilePath = face.FilePath,
                     ImageSize = face.Size,
-                    ImageUrl = $"{BaseUrl}{face.OrigUrl}"
+                    ImageUrl = $"{BaseUrl}{face.OrigUrl}",
+                    Summary = face.PbReserve?.Summary,
+                    SubType = face.PbReserve?.SubType ?? GetImageTypeFromFaceOldData(face)
                 };
 
             }
@@ -119,12 +135,36 @@ public class ImageEntity : IMessageEntity
                 PictureSize = new Vector2(face.Width, face.Height),
                 FilePath = face.FilePath,
                 ImageSize = face.Size,
-                ImageUrl = $"{LegacyBaseUrl}{face.OrigUrl}"
+                ImageUrl = $"{LegacyBaseUrl}{face.OrigUrl}",
+                Summary = face.PbReserve?.Summary,
+                SubType = face.PbReserve?.SubType ?? GetImageTypeFromFaceOldData(face)
             };
         }
 
         return null;
     }
+    
+    private static int GetImageTypeFromFaceOldData(CustomFace face)
+    {
+        if (face.OldData.Length < 5)
+        {
+            return 0;
+        }
+        // maybe legacy PCQQ(TIM)
+        return face.OldData[4].ToString("X2") switch
+        {
+            "36" => 1,
+            _ => 0,
+        };
+    }
 
-    public string ToPreviewString() => $"[Image: {PictureSize.X}x{PictureSize.Y}] {FilePath} {ImageSize} {ImageUrl}";
+    public string ToPreviewString() => $"[Image: {PictureSize.X}x{PictureSize.Y}] {ToPreviewText()} {FilePath} {ImageSize} {ImageUrl}";
+
+    public string ToPreviewText() => string.IsNullOrEmpty(Summary)
+        ? SubType switch
+        {
+            1 => "[动画表情]",
+            _ => "[图片]",
+        }
+        : Summary;
 }
