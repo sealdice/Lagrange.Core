@@ -24,6 +24,8 @@ public class OneBotSigner : SignProvider
         var _signServerUrl = config["SignServerUrl"] ?? "";
         if (_signServerUrl == "https://lwxmagic.sealdice.com/api/sign") {
             _signServerUrl = "$(SIGN_SERVER_DEFAULT)";
+        } else if (_signServerUrl == "https://lwxmagic.sealdice.com/api/sign/25765") {
+            _signServerUrl = "$(SIGN_SERVER_DEFAULT)/25765";
         }
 
         _signServer = _signServerUrl;
