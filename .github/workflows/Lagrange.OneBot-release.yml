@@ -96,7 +96,7 @@ jobs:
           r2-secret-access-key: ${{ secrets.R2_SECRET_ACCESS_KEY }}
           r2-bucket: ${{ secrets.R2_BUCKET }}
           source-dir: upload
-          destination-dir: ./lagrange/0.0.4/
+          destination-dir: ./lagrange/0.0.5/
 
       - name: Prepare release files
         uses: actions/upload-artifact@v3
