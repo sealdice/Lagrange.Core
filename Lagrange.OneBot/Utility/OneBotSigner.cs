@@ -34,6 +34,9 @@ public class OneBotSigner : SignProvider
             _signServer = "$(SIGN_SERVER_DEFAULT)";
         } else if (_signServer == "https://lwxmagic.sealdice.com/api/sign/25765") {
             _signServer = "$(SIGN_SERVER_DEFAULT)/25765";
+                } else if (_signServer == "https://seal.sign.la2.xuetao.online/api/sign/30366") {
+        _signServer = "$(SIGN_SERVER_DEFAULT)/30366";
+    }
         }
 
         string? signProxyUrl = config["SignProxyUrl"]; // Only support HTTP proxy
