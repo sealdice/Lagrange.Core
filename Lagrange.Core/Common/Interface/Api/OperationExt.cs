@@ -108,7 +108,7 @@ public static class OperationExt
         => bot.ContextCollection.Business.OperationLogic.FetchGroupRequests();
 
     /// <summary>
-    /// 
+    ///
     /// </summary>
     /// <param name="bot"></param>
     /// <returns></returns>
@@ -136,6 +136,9 @@ public static class OperationExt
 
     public static Task<bool> GroupTransfer(this BotContext bot, uint groupUin, uint targetUin)
         => bot.ContextCollection.Business.OperationLogic.GroupTransfer(groupUin, targetUin);
+
+    public static Task<bool> DeleteFriend(this BotContext bot, uint friendUin, bool block)
+        => bot.ContextCollection.Business.OperationLogic.DeleteFriend(friendUin, block);
 
     public static Task<bool> RequestFriend(this BotContext bot, uint targetUin, string question = "", string message = "")
         => bot.ContextCollection.Business.OperationLogic.RequestFriend(targetUin, question, message);
@@ -203,6 +206,9 @@ public static class OperationExt
     public static Task<BotUserInfo?> FetchUserInfo(this BotContext bot, uint uin, bool refreshCache = false)
         => bot.ContextCollection.Business.OperationLogic.FetchUserInfo(uin, refreshCache);
 
+    public static Task<(int code, string? message, BotGroupInfo info)> FetchGroupInfo(this BotContext bot, ulong uin)
+        => bot.ContextCollection.Business.OperationLogic.FetchGroupInfo(uin);
+
     public static Task<List<string>?> FetchCustomFace(this BotContext bot)
         => bot.ContextCollection.Business.OperationLogic.FetchCustomFace();
 
@@ -212,7 +218,8 @@ public static class OperationExt
     public static Task<bool> MarkAsRead(this BotContext bot, MessageChain targetChain)
     {
         uint timestamp = (uint)(targetChain.Time - new DateTime(1970, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc)).TotalSeconds;
-        return bot.ContextCollection.Business.OperationLogic.MarkAsRead(targetChain.GroupUin ?? 0, targetChain.Uid, targetChain.Sequence, timestamp);
+        return bot.ContextCollection.Business.OperationLogic.MarkAsRead(targetChain.GroupUin ?? 0, targetChain.Uid,
+            targetChain.Sequence, timestamp);
     }
 
     public static Task<bool> UploadFriendFile(this BotContext bot, uint targetUin, FileEntity fileEntity)
@@ -241,7 +248,7 @@ public static class OperationExt
 
     public static Task<List<string>?> FetchMarketFaceKey(this BotContext bot, List<string> faceIds)
         => bot.ContextCollection.Business.OperationLogic.FetchMarketFaceKey(faceIds);
-    
+
     /// <summary>
     /// Set the avatar of the bot itself
     /// </summary>
@@ -252,22 +259,44 @@ public static class OperationExt
 
     public static Task<bool> FetchSuperFaceId(this BotContext bot, uint id)
         => bot.ContextCollection.Business.OperationLogic.FetchSuperFaceId(id);
-    
+
     public static Task<SysFaceEntry?> FetchFaceEntity(this BotContext bot, uint id)
         => bot.ContextCollection.Business.OperationLogic.FetchFaceEntity(id);
-    
+
     public static Task<bool> GroupJoinEmojiChain(this BotContext bot, uint groupUin, uint emojiId, uint targetMessageSeq)
         => bot.ContextCollection.Business.OperationLogic.GroupJoinEmojiChain(groupUin, emojiId, targetMessageSeq);
 
-    public static Task<bool> FriendJoinEmojiChain(this BotContext bot, uint friendUin, uint emojiId, uint targetMessageSeq)
+    public static Task<bool> FriendJoinEmojiChain(this BotContext bot, uint friendUin, uint emojiId,
+        uint targetMessageSeq)
         => bot.ContextCollection.Business.OperationLogic.FriendJoinEmojiChain(friendUin, emojiId, targetMessageSeq);
-    
+
     public static Task<string> UploadImage(this BotContext bot, ImageEntity entity)
         => bot.ContextCollection.Business.OperationLogic.UploadImage(entity);
-    
+
     public static Task<ImageOcrResult?> OcrImage(this BotContext bot, string url)
         => bot.ContextCollection.Business.OperationLogic.ImageOcr(url);
-    
+
     public static Task<ImageOcrResult?> OcrImage(this BotContext bot, ImageEntity entity)
         => bot.ContextCollection.Business.OperationLogic.ImageOcr(entity);
+
+    public static Task<(int Code, string ErrMsg, string? Url)> GetGroupGenerateAiRecordUrl(this BotContext bot, uint groupUin, string character, string text, uint chatType)
+        => bot.ContextCollection.Business.OperationLogic.GetGroupGenerateAiRecordUrl(groupUin, character, text, chatType);
+
+    public static Task<(int Code, string ErrMsg, RecordEntity? RecordEntity)> GetGroupGenerateAiRecord(this BotContext bot, uint groupUin, string character, string text, uint chatType)
+        => bot.ContextCollection.Business.OperationLogic.GetGroupGenerateAiRecord(groupUin, character, text, chatType);
+
+    public static Task<(int Code, string ErrMsg, List<AiCharacterList>? Result)> GetAiCharacters(this BotContext bot, uint chatType, uint groupUin = 42)
+        => bot.ContextCollection.Business.OperationLogic.GetAiCharacters(chatType, groupUin);
+
+    public static Task<(int Retcode, string Message, List<uint> FriendUins, List<uint> GroupUins)> GetPins(this BotContext bot)
+        => bot.ContextCollection.Business.OperationLogic.GetPins();
+
+    public static Task<(int Retcode, string Message)> SetPinFriend(this BotContext bot, uint uin, bool isPin)
+        => bot.ContextCollection.Business.OperationLogic.SetPinFriend(uin, isPin);
+
+    public static Task<(int Retcode, string Message)> SetPinGroup(this BotContext bot, uint uin, bool isPin)
+        => bot.ContextCollection.Business.OperationLogic.SetPinGroup(uin, isPin);
+
+    public static Task<string> FetchPrivateFSDownload(this BotContext bot, string fileId, string fileHash, uint userId)
+        => bot.ContextCollection.Business.OperationLogic.FetchPrivateFSDownload(fileId, fileHash, userId);
 }

@@ -28,7 +28,7 @@ public sealed class NotifyService(BotContext bot, ILogger<NotifyService> logger,
         {
             if (@event.Chain.GetEntity<FileEntity>() is { FileUrl: { } url } file)
             {
-                var fileInfo = new OneBotFileInfo(file.FileId ?? "", file.FileName, (ulong)file.FileSize, url);
+                var fileInfo = new OneBotPrivateFileInfo(file.FileUuid ?? "", file.FileName, (ulong)file.FileSize, url, file.FileHash ?? "");
                 await service.SendJsonAsync(new OneBotPrivateFile(bot.BotUin, @event.Chain.FriendUin, fileInfo));
             }
         };
@@ -115,6 +115,7 @@ public sealed class NotifyService(BotContext bot, ILogger<NotifyService> logger,
             string type = @event.Type switch
             {
                 GroupMemberDecreaseEvent.EventType.KickMe => "kick_me",
+                GroupMemberDecreaseEvent.EventType.Disband => "disband",
                 GroupMemberDecreaseEvent.EventType.Leave => "leave",
                 GroupMemberDecreaseEvent.EventType.Kick => "kick",
                 _ => @event.Type.ToString()
@@ -150,7 +151,7 @@ public sealed class NotifyService(BotContext bot, ILogger<NotifyService> logger,
             var record = collection.FindOne(Query.And(
                 Query.EQ("FriendUin", new BsonValue(@event.FriendUin)),
                 Query.EQ("ClientSequence", new BsonValue(@event.ClientSequence)),
-                Query.EQ("MessageId", new BsonValue(0x1000000L << 32 | @event.Random))
+                Query.EQ("MessageId", new BsonValue(0x01000000L << 32 | @event.Random))
             ));
 
             await service.SendJsonAsync(new OneBotFriendRecall(bot.BotUin)
@@ -239,6 +240,16 @@ public sealed class NotifyService(BotContext bot, ILogger<NotifyService> logger,
                 @event.GroupUin,
                 @event.Name
             ));
+        };
+
+        bot.Invoker.OnBotOnlineEvent += async (bot, @event) =>
+        {
+            await service.SendJsonAsync(new OneBotBotOnline(bot.BotUin, @event.Reason));
+        };
+
+        bot.Invoker.OnBotOfflineEvent += async (bot, @event) =>
+        {
+            await service.SendJsonAsync(new OneBotBotOffline(bot.BotUin, @event.Tag, @event.Message));
         };
     }
 }

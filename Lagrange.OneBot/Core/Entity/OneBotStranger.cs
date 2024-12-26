@@ -24,4 +24,6 @@ public class OneBotStranger
     [JsonPropertyName("status")] public OneBotFriendStatus Status { get; set; } = new();
 
     [JsonPropertyName("RegisterTime")] public DateTime RegisterTime { get; set; }
+
+    [JsonPropertyName("Business")] public List<OneBotBusiness> Business { get; set; } = new();
 }

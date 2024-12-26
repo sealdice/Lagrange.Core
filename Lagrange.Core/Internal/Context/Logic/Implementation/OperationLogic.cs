@@ -212,6 +212,7 @@ internal class OperationLogic : LogicBase
             if (((GroupFSListEvent)events[0]).IsEnd) break;
             startIndex += 20;
         }
+
         return entries;
     }
 
@@ -220,6 +221,15 @@ internal class OperationLogic : LogicBase
         var groupFSDownloadEvent = GroupFSDownloadEvent.Create(groupUin, fileId);
         var events = await Collection.Business.SendEvent(groupFSDownloadEvent);
         return $"{((GroupFSDownloadEvent)events[0]).FileUrl}{fileId}";
+    }
+
+    public async Task<string> FetchPrivateFSDownload(string fileId, string fileHash, uint userId)
+    {
+        var uid = await Collection.Business.CachingLogic.ResolveUid(null, userId);
+        if (uid == null) return "false";
+        var privateFSDownloadEvent = FileDownloadEvent.Create(fileId, fileHash, uid, uid);
+        var events = await Collection.Business.SendEvent(privateFSDownloadEvent);
+        return $"{((FileDownloadEvent)events[0]).FileUrl}";
     }
 
     public async Task<(int, string)> GroupFSMove(uint groupUin, string fileId, string parentDirectory, string targetDirectory)
@@ -350,7 +360,8 @@ internal class OperationLogic : LogicBase
 
         foreach (var result in resolved)
         {
-            var uins = await Task.WhenAll(ResolveUid(result.InvitorMemberUid), ResolveUid(result.TargetMemberUid), ResolveUid(result.OperatorUid));
+            var uins = await Task.WhenAll(ResolveUid(result.InvitorMemberUid), ResolveUid(result.TargetMemberUid),
+                ResolveUid(result.OperatorUid));
             uint invitorUin = uins[0];
             uint targetUin = uins[1];
             uint operatorUin = uins[2];
@@ -430,6 +441,14 @@ internal class OperationLogic : LogicBase
     {
         var setCustomStatusEvent = SetCustomStatusEvent.Create(faceId, text);
         var results = await Collection.Business.SendEvent(setCustomStatusEvent);
+        return results.Count != 0 && results[0].ResultCode == 0;
+    }
+
+    public async Task<bool> DeleteFriend(uint targetUin, bool block)
+    {
+        var uid = await Collection.Business.CachingLogic.ResolveUid(null, targetUin);
+        var deleteFriendEvent = DeleteFriendEvent.Create(uid, block);
+        var results = await Collection.Business.SendEvent(deleteFriendEvent);
         return results.Count != 0 && results[0].ResultCode == 0;
     }
 
@@ -601,6 +620,14 @@ internal class OperationLogic : LogicBase
         return await Collection.Business.CachingLogic.GetCachedUsers(uin, refreshCache);
     }
 
+    public async Task<(int code, string? message, BotGroupInfo info)> FetchGroupInfo(ulong uin)
+    {
+        var events = await Collection.Business.SendEvent(GetGroupInfoEvent.Create(uin));
+        if (events.Count == 0) return (-1, "No Result", new());
+        var @event = (GetGroupInfoEvent)events[0];
+        return (@event.ResultCode, @event.Message, @event.Info);
+    }
+
     public async Task<bool> SetMessageReaction(uint groupUin, uint sequence, string code, bool isAdd)
     {
         if (isAdd)
@@ -664,7 +691,8 @@ internal class OperationLogic : LogicBase
 
         var ticket = ((HighwayUrlEvent)highwayUrlResults[0]).SigSession;
         var md5 = avatar.ImageStream.Value.Md5().UnHex();
-        return await Collection.Highway.UploadSrcByStreamAsync(90, avatar.ImageStream.Value, ticket, md5, Array.Empty<byte>());
+        return await Collection.Highway.UploadSrcByStreamAsync(90, avatar.ImageStream.Value, ticket, md5,
+            Array.Empty<byte>());
     }
 
     public async Task<bool> GroupSetAvatar(uint groupUin, ImageEntity avatar)
@@ -697,18 +725,20 @@ internal class OperationLogic : LogicBase
         var ret = (FetchGroupAtAllRemainEvent)results[0];
         return (ret.RemainAtAllCountForUin, ret.RemainAtAllCountForGroup);
     }
-    
-    public async Task<bool> FetchSuperFaceId(uint id) => await Collection.Business.CachingLogic.GetCachedIsSuperFaceId(id);
 
-    public async Task<SysFaceEntry?> FetchFaceEntity(uint id) => await Collection.Business.CachingLogic.GetCachedFaceEntity(id);
-    
+    public async Task<bool> FetchSuperFaceId(uint id) =>
+        await Collection.Business.CachingLogic.GetCachedIsSuperFaceId(id);
+
+    public async Task<SysFaceEntry?> FetchFaceEntity(uint id) =>
+        await Collection.Business.CachingLogic.GetCachedFaceEntity(id);
+
     public async Task<bool> GroupJoinEmojiChain(uint groupUin, uint emojiId, uint targetMessageSeq)
     {
         var groupJoinEmojiChainEvent = GroupJoinEmojiChainEvent.Create(targetMessageSeq, emojiId, groupUin);
         var results = await Collection.Business.SendEvent(groupJoinEmojiChainEvent);
         return results.Count != 0 && results[0].ResultCode == 0;
     }
-    
+
     public async Task<bool> FriendJoinEmojiChain(uint friendUin, uint emojiId, uint targetMessageSeq)
     {
         string? friendUid = await Collection.Business.CachingLogic.ResolveUid(null, friendUin);
@@ -717,7 +747,59 @@ internal class OperationLogic : LogicBase
         var results = await Collection.Business.SendEvent(friendJoinEmojiChainEvent);
         return results.Count != 0 && results[0].ResultCode == 0;
     }
-    
+
+    public async Task<(int Code, string ErrMsg, string? Url)> GetGroupGenerateAiRecordUrl(uint groupUin, string character, string text, uint chatType)
+    {
+        var (code, errMsg, record) = await GetGroupGenerateAiRecord(groupUin, character, text, chatType);
+        if (code != 0)
+            return (code, errMsg, null);
+
+        var recordGroupDownloadEvent = RecordGroupDownloadEvent.Create(groupUin, record!.MsgInfo!);
+        var @event = await Collection.Business.SendEvent(recordGroupDownloadEvent);
+        if (@event.Count == 0) return (-1, "running event missing!", null);
+
+        var finalResult = (RecordGroupDownloadEvent)@event[0];
+        return finalResult.ResultCode == 0
+            ? (finalResult.ResultCode, string.Empty, finalResult.AudioUrl)
+            : (finalResult.ResultCode, "Failed to get group ai record", null);
+    }
+
+    public async Task<(int Code, string ErrMsg, RecordEntity? Record)> GetGroupGenerateAiRecord(uint groupUin, string character, string text, uint chatType)
+    {
+        var groupAiRecordEvent = GroupAiRecordEvent.Create(groupUin, character, text, chatType, (uint)Random.Shared.Next());
+        while (true)
+        {
+            var results = await Collection.Business.SendEvent(groupAiRecordEvent);
+            if (results.Count == 0) return (-1, "running event missing!", null);
+            var aiRecordResult = (GroupAiRecordEvent)results[0];
+            if (aiRecordResult.ResultCode != 0)
+                return (aiRecordResult.ResultCode, aiRecordResult.ErrorMessage, null);
+            if (aiRecordResult.RecordInfo is not null)
+            {
+                var index = aiRecordResult.RecordInfo!.MsgInfoBody[0].Index;
+                return (aiRecordResult.ResultCode, string.Empty, new RecordEntity(index.FileUuid, index.Info.FileName, index.Info.FileHash.UnHex())
+                {
+                    AudioLength = (int)index.Info.Time,
+                    FileSha1 = index.Info.FileSha1,
+                    MsgInfo = aiRecordResult.RecordInfo
+                });
+            }
+        }
+
+    }
+
+    public async Task<(int Code, string ErrMsg, List<AiCharacterList>? Result)> GetAiCharacters(uint chatType, uint groupUin)
+    {
+        var fetchAiRecordListEvent = FetchAiCharacterListEvent.Create(chatType, groupUin);
+
+        var results = await Collection.Business.SendEvent(fetchAiRecordListEvent);
+        if (results.Count == 0) return (-1, "Event missing!", null);
+
+        var result = (FetchAiCharacterListEvent)results[0];
+
+        return (result.ResultCode, result.ErrorMessage, result.AiCharacters);
+    }
+
     public async Task<string> UploadImage(ImageEntity image)
     {
         await Collection.Highway.ManualUploadEntity(image);
@@ -728,17 +810,59 @@ internal class OperationLogic : LogicBase
         var ret = (ImageDownloadEvent)result[0];
         return ret.ImageUrl;
     }
-    
+
     public async Task<ImageOcrResult?> ImageOcr(string imageUrl)
     {
         var imageOcrEvent = ImageOcrEvent.Create(imageUrl);
         var results = await Collection.Business.SendEvent(imageOcrEvent);
         return results.Count != 0 ? ((ImageOcrEvent)results[0]).ImageOcrResult : null;
     }
-    
+
     public async Task<ImageOcrResult?> ImageOcr(ImageEntity image)
     {
         var imageUrl = await UploadImage(image);
         return await ImageOcr(imageUrl);
+    }
+
+    public async Task<(int Retcode, string Message, List<uint> FriendUins, List<uint> GroupUins)> GetPins()
+    {
+        var @event = FetchPinsEvent.Create();
+
+        var results = await Collection.Business.SendEvent(@event);
+        if (results.Count == 0)
+        {
+            return (-1, "No Result", new(), new());
+        }
+
+        var result = (FetchPinsEvent)results[0];
+        return (result.ResultCode, result.Message, result.FriendUins, result.GroupUins);
+    }
+
+    public async Task<(int Retcode, string Message)> SetPinFriend(uint uin, bool isPin)
+    {
+        var @event = SetPinFriendEvent.Create(uin, isPin);
+
+        var results = await Collection.Business.SendEvent(@event);
+        if (results.Count == 0)
+        {
+            return (-1, "No Result");
+        }
+
+        var result = (SetPinFriendEvent)results[0];
+        return (result.ResultCode, result.Message);
+    }
+
+    public async Task<(int Retcode, string Message)> SetPinGroup(uint uin, bool isPin)
+    {
+        var @event = SetPinGroupEvent.Create(uin, isPin);
+
+        var results = await Collection.Business.SendEvent(@event);
+        if (results.Count == 0)
+        {
+            return (-1, "No Result");
+        }
+
+        var result = (SetPinGroupEvent)results[0];
+        return (result.ResultCode, result.Message);
     }
 }
