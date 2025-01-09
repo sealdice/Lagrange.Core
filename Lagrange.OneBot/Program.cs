@@ -3,6 +3,7 @@ using System.Runtime;
 using System.Text;
 using System.CommandLine;
 using System.CommandLine.Invocation;
+using Lagrange.OneBot.Extensions;
 using Microsoft.Extensions.Hosting;
 
 
@@ -45,14 +46,14 @@ internal abstract class Program
             temp.Close();
 
             Console.WriteLine("Please Edit the appsettings.json to set configs and press any key to continue");
-            Console.ReadLine();
+            Console.ReadKey(true);
         }
 
-        var hostBuilder = new LagrangeAppBuilder(args)
-            .ConfigureConfiguration("appsettings.json", false, true)
-            .ConfigureBots()
-            .ConfigureOneBot();
-
-        hostBuilder.Build().Run();
+        Host.CreateApplicationBuilder()
+            .ConfigureLagrangeCore()
+            .ConfigureOneBot()
+            .Build()
+            .InitializeMusicSigner() // Very ugly (
+            .Run();
     }
 }
