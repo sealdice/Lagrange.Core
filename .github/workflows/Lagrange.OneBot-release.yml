@@ -45,7 +45,7 @@ jobs:
         run: dotnet publish Lagrange.OneBot/Lagrange.OneBot.csproj --self-contained -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true -p:DebugType=none -p:RuntimeIdentifier=${{ matrix.runtimeIdentifier }} --framework net8.0
 
       - name: Upload binary files(${{ matrix.runtimeIdentifier }}) for .NET 8.0
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: Lagrange.OneBot_${{ matrix.runtimeIdentifier }}_8.0
           path: Lagrange.OneBot/bin/Release/net8.0/${{ matrix.runtimeIdentifier }}/publish
@@ -77,12 +77,12 @@ jobs:
           r2-secret-access-key: ${{ secrets.R2_SECRET_ACCESS_KEY }}
           r2-bucket: ${{ secrets.R2_BUCKET }}
           source-dir: upload
-          destination-dir: ./lagrange/0.0.5/
+          destination-dir: ./lagrange/0.0.6/
 
       - name: Prepare release files
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
-          name: Lagrange.OneBot_all
+          name: Lagrange.OneBot_all_${{ matrix.runtimeIdentifier }}_8.0
           path: Lagrange.OneBot_${{ matrix.runtimeIdentifier }}_8.0.zip
 
   Build-Android:
@@ -116,7 +116,7 @@ jobs:
         run: dir 'Lagrange.OneBot\bin\Release\net8.0\${{ matrix.runtimeIdentifier }}\publish\'
 
       - name: Upload binary files(${{ matrix.runtimeIdentifier }}) for .NET 8.0
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: Lagrange.OneBot_${{ matrix.runtimeIdentifier }}_8.0
           path: Lagrange.OneBot/bin/Release/net8.0/${{ matrix.runtimeIdentifier }}/publish
@@ -141,9 +141,9 @@ jobs:
           destination-dir: ./lagrange/
 
       - name: Prepare release files
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
-          name: Lagrange.OneBot_all
+          name: Lagrange.OneBot_all_${{ matrix.runtimeIdentifier }}_8.0
           path: Lagrange.OneBot_${{ matrix.runtimeIdentifier }}_8.0.zip
 
   NightlyRelease:
@@ -163,9 +163,9 @@ jobs:
           git tag -f nightly
           git push -f origin nightly
       - name: Download Artifacts
-        uses: actions/download-artifact@v3
+        uses: actions/download-artifact@v4
         with:
-          name: Lagrange.OneBot_all
+          name: Lagrange.OneBot_all*
           path: ./bin
       - name: Update Nightly Release
         uses: ncipollo/release-action@v1
@@ -191,4 +191,4 @@ jobs:
       - uses: geekyeggo/delete-artifact@v2
         with:
           name: |
-            Lagrange.OneBot_all
+            Lagrange.OneBot_all*
