@@ -140,11 +140,11 @@ jobs:
           source-dir: upload
           destination-dir: ./lagrange/
 
-      - name: Prepare release files
-        uses: actions/upload-artifact@v4
-        with:
-          name: Lagrange.OneBot_all_${{ matrix.runtimeIdentifier }}_8.0
-          path: Lagrange.OneBot_${{ matrix.runtimeIdentifier }}_8.0.zip
+      # - name: Prepare release files
+      #   uses: actions/upload-artifact@v4
+      #   with:
+      #     name: Lagrange.OneBot_all_${{ matrix.runtimeIdentifier }}_8.0
+      #     path: Lagrange.OneBot_${{ matrix.runtimeIdentifier }}_8.0.zip
 
   NightlyRelease:
     name: Nightly Release
@@ -162,11 +162,11 @@ jobs:
         run: |
           git tag -f nightly
           git push -f origin nightly
-      - name: Download Artifacts
-        uses: actions/download-artifact@v4
-        with:
-          name: Lagrange.OneBot_all*
-          path: ./bin
+      # - name: Download Artifacts
+      #   uses: actions/download-artifact@v4
+      #   with:
+      #     name: Lagrange.OneBot_all*
+      #     path: ./bin
       - name: Update Nightly Release
         uses: ncipollo/release-action@v1
         with:
