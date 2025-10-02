@@ -3,14 +3,16 @@ using System.Text;
 using System.Text.Json;
 using System.Text.Json.Serialization.Metadata;
 using Lagrange.Core;
+using Lagrange.Core.Common.Entity;
 using Lagrange.Core.Event.EventArg;
 using Lagrange.Core.Message;
 using Lagrange.Core.Utility.Extension;
+using Lagrange.OneBot.Core.Entity;
 using Lagrange.OneBot.Core.Entity.Message;
 using Lagrange.OneBot.Core.Network;
 using Lagrange.OneBot.Database;
 using Lagrange.OneBot.Message.Entity;
-using LiteDB;
+using Lagrange.OneBot.Utility;
 using Microsoft.Extensions.Configuration;
 using JsonSerializer = System.Text.Json.JsonSerializer;
 
@@ -22,7 +24,7 @@ namespace Lagrange.OneBot.Message;
 public sealed class MessageService
 {
     private readonly LagrangeWebSvcCollection _service;
-    private readonly LiteDatabase _context;
+    private readonly RealmHelper _realm;
     private readonly IConfiguration _config;
     private readonly Dictionary<Type, List<(string Type, SegmentBase Factory)>> _entityToFactory;
     private readonly bool _stringPost;
@@ -34,10 +36,10 @@ public sealed class MessageService
         Options = new JsonSerializerOptions { TypeInfoResolver = new DefaultJsonTypeInfoResolver { Modifiers = { ModifyTypeInfo } } };
     }
 
-    public MessageService(BotContext bot, LagrangeWebSvcCollection service, LiteDatabase context, IConfiguration config)
+    public MessageService(BotContext bot, LagrangeWebSvcCollection service, RealmHelper realm, IConfiguration config)
     {
         _service = service;
-        _context = context;
+        _realm = realm;
         _config = config;
         _stringPost = config.GetValue<bool>("Message:StringPost");
 
@@ -54,7 +56,7 @@ public sealed class MessageService
             if (attribute != null)
             {
                 var instance = (SegmentBase)type.CreateInstance(false);
-                instance.Database = _context;
+                instance.Realm = _realm;
 
                 if (_entityToFactory.TryGetValue(attribute.Entity, out var factories)) factories.Add((attribute.Type, instance));
                 else _entityToFactory[attribute.Entity] = [(attribute.Type, instance)];
@@ -64,8 +66,7 @@ public sealed class MessageService
 
     private void OnFriendMessageReceived(BotContext bot, FriendMessageEvent e)
     {
-        var record = (MessageRecord)e.Chain;
-        _context.GetCollection<MessageRecord>().Insert(new BsonValue(record.MessageHash), record);
+        _realm.Do(realm => realm.Write(() => realm.Add<MessageRecord>(e.Chain)));
 
         if (_config.GetValue<bool>("Message:IgnoreSelf") && e.Chain.FriendUin == bot.BotUin) return; // ignore self message
 
@@ -79,28 +80,30 @@ public sealed class MessageService
         var segments = Convert(chain);
         int hash = MessageRecord.CalcMessageHash(chain.MessageId, chain.Sequence);
         string raw = ToRawMessage(segments);
-        object request = _stringPost ? new OneBotPrivateStringMsg(uin, new OneBotSender(chain.FriendUin, chain.FriendInfo?.Nickname ?? string.Empty), "friend")
+        object request = _stringPost ? new OneBotPrivateStringMsg(uin, new OneBotSender(chain.FriendUin, chain.FriendInfo?.Nickname ?? string.Empty), "friend", ((DateTimeOffset)chain.Time).ToUnixTimeSeconds())
         {
             MessageId = hash,
             UserId = chain.FriendUin,
             Message = raw,
             RawMessage = raw,
             TargetId = chain.TargetUin,
-        } : new OneBotPrivateMsg(uin, new OneBotSender(chain.FriendUin, chain.FriendInfo?.Nickname ?? string.Empty), "friend")
+            MessageStyle = ConvertMessageStyle(chain.Style)
+        } : new OneBotPrivateMsg(uin, new OneBotSender(chain.FriendUin, chain.FriendInfo?.Nickname ?? string.Empty), "friend", ((DateTimeOffset)chain.Time).ToUnixTimeSeconds())
         {
             MessageId = hash,
             UserId = chain.FriendUin,
             Message = segments,
             RawMessage = raw,
-            TargetId = chain.TargetUin
+            TargetId = chain.TargetUin,
+            MessageStyle = ConvertMessageStyle(chain.Style)
         };
         return request;
     }
 
     private void OnGroupMessageReceived(BotContext bot, GroupMessageEvent e)
     {
-        var record = (MessageRecord)e.Chain;
-        _context.GetCollection<MessageRecord>().Insert(new BsonValue(record.MessageHash), record);
+        _realm.Do(realm => realm.Write(() => realm.Add<MessageRecord>(e.Chain)));
+
         if (_config.GetValue<bool>("Message:IgnoreSelf") && e.Chain.FriendUin == bot.BotUin) return; // ignore self message
 
         var request = ConvertToGroupMsg(bot.BotUin, e.Chain);
@@ -113,23 +116,24 @@ public sealed class MessageService
         var segments = Convert(chain);
         int hash = MessageRecord.CalcMessageHash(chain.MessageId, chain.Sequence);
         object request = _stringPost
-            ? new OneBotGroupStringMsg(uin, chain.GroupUin ?? 0, ToRawMessage(segments), chain.GroupMemberInfo ?? throw new Exception("Group member not found"), hash)
-            : new OneBotGroupMsg(uin, chain.GroupUin ?? 0, segments, ToRawMessage(segments), chain.GroupMemberInfo ?? throw new Exception("Group member not found"), hash);
+            ? new OneBotGroupStringMsg(uin, chain.GroupUin ?? 0, ToRawMessage(segments), chain.GroupMemberInfo ?? throw new Exception("Group member not found"), hash, ((DateTimeOffset)chain.Time).ToUnixTimeSeconds(), ConvertMessageStyle(chain.Style))
+            : new OneBotGroupMsg(uin, chain.GroupUin ?? 0, segments, ToRawMessage(segments), chain.GroupMemberInfo ?? throw new Exception("Group member not found"), hash, ((DateTimeOffset)chain.Time).ToUnixTimeSeconds(), ConvertMessageStyle(chain.Style));
         return request;
     }
 
     private void OnTempMessageReceived(BotContext bot, TempMessageEvent e)
     {
         var record = (MessageRecord)e.Chain;
-        _context.GetCollection<MessageRecord>().Insert(new BsonValue(record.MessageHash), record);
+        _realm.Do(realm => realm.Write(() => realm.Add(record)));
 
         var segments = Convert(e.Chain);
-        var request = new OneBotPrivateMsg(bot.BotUin, new OneBotSender(e.Chain.FriendUin, e.Chain.FriendInfo?.Nickname ?? string.Empty), "group")
+        var request = new OneBotPrivateMsg(bot.BotUin, new OneBotSender(e.Chain.FriendUin, e.Chain.FriendInfo?.Nickname ?? string.Empty), "group", ((DateTimeOffset)e.Chain.Time).ToUnixTimeSeconds())
         {
-            MessageId = record.MessageHash,
+            MessageId = record.Id,
             UserId = e.Chain.FriendUin,
             Message = segments,
-            RawMessage = ToRawMessage(segments)
+            RawMessage = ToRawMessage(segments),
+            MessageStyle = ConvertMessageStyle(e.Chain.Style)
         };
 
         _ = _service.SendJsonAsync(request);
@@ -193,5 +197,10 @@ public sealed class MessageService
         {
             ti.Properties.Remove(info);
         }
+    }
+
+    private static OnebotMessageStyle? ConvertMessageStyle(MessageStyle? style)
+    {
+        return style == null ? null : new OnebotMessageStyle(style);
     }
 }

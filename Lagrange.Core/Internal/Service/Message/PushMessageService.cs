@@ -138,7 +138,7 @@ internal class PushMessageService : BaseService<PushMessageEvent>
                 _ = packet.ReadUint();  // group uin
                 _ = packet.ReadByte();  // unknown byte
                 var proto = packet.ReadBytes(Prefix.Uint16 | Prefix.LengthOnly); // proto length error
-                var msgBody = Serializer.Deserialize<NotifyMessageBody>(proto);
+                var msgBody = Serializer.Deserialize<NotifyMessageBody>(proto.AsSpan());
                 switch ((Event0x2DCSubType16Field13)(msgBody.Field13 ?? 0))
                 {
                     case Event0x2DCSubType16Field13.GroupMemberSpecialTitleNotice:
@@ -178,7 +178,7 @@ internal class PushMessageService : BaseService<PushMessageEvent>
                 _ = packet.ReadUint();  // group uin
                 _ = packet.ReadByte();  // unknown byte
                 var proto = packet.ReadBytes(Prefix.Uint16 | Prefix.LengthOnly);
-                var recall = Serializer.Deserialize<NotifyMessageBody>(proto);
+                var recall = Serializer.Deserialize<NotifyMessageBody>(proto.AsSpan());
                 var meta = recall.Recall.RecallMessages[0];
                 var groupRecallEvent = GroupSysRecallEvent.Result(
                     recall.GroupUin,
@@ -207,26 +207,43 @@ internal class PushMessageService : BaseService<PushMessageEvent>
                 }
                 break;
             }
-            case Event0x2DCSubType.GroupEssenceNotice when msg.Message.Body?.MsgContent is { } content:
+            case Event0x2DCSubType.GroupGreyTipNotice21 when msg.Message.Body?.MsgContent is { } content:
             {
                 using var packet = new BinaryPacket(content);
                 _ = packet.ReadUint();  // group uin
                 _ = packet.ReadByte();  // unknown byte
                 var proto = packet.ReadBytes(Prefix.Uint16 | Prefix.LengthOnly);
-                var essence = Serializer.Deserialize<NotifyMessageBody>(proto);
-                var essenceMsg = essence.EssenceMessage;
-                var groupEssenceEvent = GroupSysEssenceEvent.Result(essenceMsg.GroupUin, essenceMsg.MsgSequence,
-                    essenceMsg.Random, essenceMsg.SetFlag, essenceMsg.MemberUin, essenceMsg.OperatorUin);
-                extraEvents.Add(groupEssenceEvent);
+                var greytip = Serializer.Deserialize<NotifyMessageBody>(proto.AsSpan());
+
+                if (greytip.Type == 27) // essence
+                {
+                    var essenceMsg = greytip.EssenceMessage;
+                    var groupEssenceEvent = GroupSysEssenceEvent.Result(essenceMsg.GroupUin, essenceMsg.MsgSequence,
+                        essenceMsg.Random, essenceMsg.SetFlag, essenceMsg.MemberUin, essenceMsg.OperatorUin);
+                    extraEvents.Add(groupEssenceEvent);
+                    break;
+                }
+
+                if (greytip.Type == 32) // recall poke
+                {
+                    var recallPoke = greytip.GroupRecallPoke;
+                    var @event = GroupSysRecallPokeEvent.Result(
+                        recallPoke.GroupUin,
+                        recallPoke.OperatorUid,
+                        recallPoke.TipsSeqId
+                    );
+                    extraEvents.Add(@event);
+                }
+
                 break;
             }
-            case Event0x2DCSubType.GroupGreyTipNotice when msg.Message.Body?.MsgContent is { } content:
+            case Event0x2DCSubType.GroupGreyTipNotice20 when msg.Message.Body?.MsgContent is { } content:
             {
                 using var packet = new BinaryPacket(content);
                 uint groupUin = packet.ReadUint();  // group uin
                 _ = packet.ReadByte();  // unknown byte
                 var proto = packet.ReadBytes(Prefix.Uint16 | Prefix.LengthOnly);
-                var greyTip = Serializer.Deserialize<NotifyMessageBody>(proto);
+                var greyTip = Serializer.Deserialize<NotifyMessageBody>(proto.AsSpan());
 
                 var templates = greyTip.GeneralGrayTip.MsgTemplParam.ToDictionary(x => x.Name, x => x.Value);
 
@@ -237,7 +254,17 @@ internal class PushMessageService : BaseService<PushMessageEvent>
 
                 if (greyTip.GeneralGrayTip.BusiType == 12)  // poke
                 {
-                    var groupPokeEvent = GroupSysPokeEvent.Result(groupUin, uint.Parse(templates["uin_str1"]), uint.Parse(templates["uin_str2"]), actionStr, templates["suffix_str"], templates["action_img_url"]);
+                    var groupPokeEvent = GroupSysPokeEvent.Result(
+                        groupUin,
+                        uint.Parse(templates["uin_str1"]),
+                        uint.Parse(templates["uin_str2"]),
+                        actionStr,
+                        templates["suffix_str"],
+                        templates["action_img_url"],
+                        greyTip.MsgSequence,
+                        (ulong)msg.Message.ContentHead.Timestamp!.Value,
+                        greyTip.TipsSeqId
+                    );
                     extraEvents.Add(groupPokeEvent);
                 }
                 break;
@@ -258,7 +285,7 @@ internal class PushMessageService : BaseService<PushMessageEvent>
             {
                 if (Serializer.Deserialize<FriendRequest>(content.AsSpan()).Info is { } info)
                 {
-                    var friendEvent = FriendSysRequestEvent.Result(msg.Message.ResponseHead.FromUin, info.SourceUid, info.Message, info.Source);
+                    var friendEvent = FriendSysRequestEvent.Result(msg.Message.ResponseHead.FromUin, info.SourceUid, info.Message, info.Source ?? info.NewSource);
                     extraEvents.Add(friendEvent);
                 }
                 break;
@@ -324,9 +351,25 @@ internal class PushMessageService : BaseService<PushMessageEvent>
 
                 if (greyTip.BusiType == 12)  // poke
                 {
-                    var friendPokeEvent = FriendSysPokeEvent.Result(uint.Parse(templates["uin_str1"]), uint.Parse(templates["uin_str2"]), actionStr, templates["suffix_str"], templates["action_img_url"]);
+                    var friendPokeEvent = FriendSysPokeEvent.Result(
+                        uint.Parse(templates["uin_str1"]),
+                        uint.Parse(templates["uin_str2"]),
+                        actionStr,
+                        templates["suffix_str"],
+                        templates["action_img_url"],
+                        msg.Message.ResponseHead.FromUin,
+                        greyTip.MsgInfo.Sequence,
+                        (ulong)msg.Message.ContentHead.Timestamp!.Value,
+                        greyTip.TipsSeqId
+                    );
                     extraEvents.Add(friendPokeEvent);
                 }
+                break;
+            }
+            case Event0x210SubType.FriendRecallPoke when msg.Message.Body?.MsgContent is { } content:
+            {
+                var recall = Serializer.Deserialize<FriendRecallPokeInfo>(content.AsSpan());
+                extraEvents.Add(FriendSysRecallPokeEvent.Result(recall.PeerUid, recall.OperatorUid, recall.TipsSeqId));
                 break;
             }
             default:
@@ -361,8 +404,8 @@ internal class PushMessageService : BaseService<PushMessageEvent>
         GroupMuteNotice = 12,
         SubType16 = 16,
         GroupRecallNotice = 17,
-        GroupEssenceNotice = 21,
-        GroupGreyTipNotice = 20,
+        GroupGreyTipNotice21 = 21,
+        GroupGreyTipNotice20 = 20,
     }
 
     private enum Event0x2DCSubType16Field13
@@ -382,5 +425,6 @@ internal class PushMessageService : BaseService<PushMessageEvent>
         ServicePinChanged = 199, // e.g: My computer | QQ Wallet | ...
         FriendPokeNotice = 290,
         GroupKickNotice = 212,
+        FriendRecallPoke = 321,
     }
 }

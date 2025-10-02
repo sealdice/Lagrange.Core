@@ -54,6 +54,8 @@ internal class SceneInfo
 
     [ProtoMember(102)] public uint BusinessType { get; set; } // 3
 
+    [ProtoMember(103)] public uint Field103 { get; set; } // 0
+
     [ProtoMember(200)] public uint SceneType { get; set; } // 1
 
     [ProtoMember(201)] public C2CUserInfo? C2C { get; set; }
@@ -295,15 +297,27 @@ internal class PicExtBizInfo
 
     [ProtoMember(2)] public string TextSummary { get; set; }
 
-    [ProtoMember(11)] public byte[]? BytesPbReserveC2c { get; set; }
+    [ProtoMember(11)] public PicExtBizInfoC2c? C2c { get; set; }
 
-    [ProtoMember(12)] public byte[]? BytesPbReserveTroop { get; set; }
+    [ProtoMember(12)] public PicExtBizInfoTroop? Troop { get; set; }
 
     [ProtoMember(1001)] public uint FromScene { get; set; }
 
     [ProtoMember(1002)] public uint ToScene { get; set; }
 
     [ProtoMember(1003)] public uint OldFileId { get; set; }
+}
+
+[ProtoContract]
+internal class PicExtBizInfoC2c
+{
+    [ProtoMember(1)] public uint SubType { get; set; }
+}
+
+[ProtoContract]
+internal class PicExtBizInfoTroop
+{
+    [ProtoMember(1)] public uint SubType { get; set; }
 }
 
 [ProtoContract]

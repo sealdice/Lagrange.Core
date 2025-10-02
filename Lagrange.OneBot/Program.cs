@@ -1,59 +1,108 @@
 using System.Reflection;
 using System.Runtime;
 using System.Text;
-using System.CommandLine;
-using System.CommandLine.Invocation;
 using Lagrange.OneBot.Extensions;
 using Microsoft.Extensions.Hosting;
-
 
 namespace Lagrange.OneBot;
 
 internal abstract class Program
 {
-    public static void Main(string[] args)
+    public static async Task Main(string[] args)
     {
-        string version = Assembly.GetAssembly(typeof(Program))?
-            .GetCustomAttribute<AssemblyInformationalVersionAttribute>()?
-            .InformationalVersion ?? "Unknown Lagrange.OneBot Version";
-        Console.WriteLine($"Lagrange.OneBot Version: {version}\n");
+        string? version = Assembly
+            .GetAssembly(typeof(Program))
+            ?.GetCustomAttribute<AssemblyInformationalVersionAttribute>()
+            ?.InformationalVersion;
+
+        Console.ForegroundColor = ConsoleColor.Magenta;
+        if (Console.BufferWidth >= 45)
+        {
+            Console.WriteLine(
+                $$"""
+                   __
+                  / / ___ ____ ________ ____  ___ ____
+                 / /_/ _ `/ _ `/ __/ _ `/ _ \/ _ `/ -_)
+                /____|_,_/\_, /_/  \_,_/_//_/\_, /\__/
+                         /___/   ____       /___/__       __
+                                / __ \___  ___ / _ )___  / /_
+                               / /_/ / _ \/ -_) _  / _ \/ __/
+                               \____/_//_/\__/____/\___/\__/
+                """
+            );
+        }
+        else
+            Console.WriteLine("Lagrange.OneBot");
+
+        Console.ResetColor();
+
+        Console.WriteLine($"Version: {version?[^40..] ?? "unknown"}\n");
+
+        
+        // AutoUpdate
+        var updater = new Updater.GithubUpdater();
+        await updater.GetConfig();
+        if (updater.Config.EnableAutoUpdate)
+        {
+            Console.WriteLine("Auto update enabled, Checking for updates...");
+            try
+            {
+                if (await updater.CheckUpdate())
+                {
+                    Console.WriteLine($"Update available, downloading...");
+                    await updater.Update();
+                }
+                else
+                {
+                    Console.WriteLine("No updates available, continuing...");
+                }
+
+                if (updater.Config.CheckInterval > 0)
+                {
+                    Console.WriteLine(
+                        $"Interval check enabled, Next check in {updater.Config.CheckInterval} seconds."
+                    );
+                    updater.StartIntervalCheck();
+                }
+            }
+            catch (Exception e)
+            {
+                Console.WriteLine(
+                    $"Error checking for updates: {e.Message}, please check your network connection or config file, use proxy if needed."
+                );
+            }
+        }
 
         Console.OutputEncoding = Encoding.UTF8;
         Console.InputEncoding = Encoding.UTF8;
 
         GCSettings.LatencyMode = GCLatencyMode.Batch;
 
-        if (!(args.Length > 0 && args[0] == "")) {
-            // 跳过空参数
-            var rootCommand = new RootCommand();
-            rootCommand.Invoke(args);
-
-            if (args.Length > 0) {
-                Environment.Exit(0);
-            }
-        }
-
         if (!File.Exists("appsettings.json"))
         {
             Console.WriteLine("No exist config file, create it now...");
 
             var assm = Assembly.GetExecutingAssembly();
-            using var istr = assm.GetManifestResourceStream("Lagrange.OneBot.Resources.appsettings.json")!;
+            using var istr = assm.GetManifestResourceStream(
+                "Lagrange.OneBot.Resources.appsettings.json"
+            )!;
             using var temp = File.Create("appsettings.json");
             istr.CopyTo(temp);
 
             istr.Close();
             temp.Close();
 
-            Console.WriteLine("Please Edit the appsettings.json to set configs and press any key to continue");
+            Console.WriteLine(
+                "Please Edit the appsettings.json to set configs and press any key to continue"
+            );
             Console.ReadKey(true);
         }
 
-        Host.CreateApplicationBuilder()
+        await Host.CreateApplicationBuilder()
             .ConfigureLagrangeCore()
             .ConfigureOneBot()
             .Build()
             .InitializeMusicSigner() // Very ugly (
-            .Run();
+            .RunAsync();
     }
 }

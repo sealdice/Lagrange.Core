@@ -3,7 +3,7 @@ using System.Text.Json.Serialization;
 namespace Lagrange.OneBot.Core.Entity.Message;
 
 [Serializable]
-public class OneBotPrivateMsg(uint selfId, OneBotSender groupSender, string subType) : OneBotEntityBase(selfId, "message")
+public class OneBotPrivateMsg(uint selfId, OneBotSender groupSender, string subType, long time) : OneBotEntityBase(selfId, "message", time)
 {
     [JsonPropertyName("message_type")] public string MessageType { get; set; } = "private";
 
@@ -22,10 +22,12 @@ public class OneBotPrivateMsg(uint selfId, OneBotSender groupSender, string subT
     [JsonPropertyName("sender")] public OneBotSender GroupSender { get; set; } = groupSender;
 
     [JsonPropertyName("target_id")] public uint TargetId { get; set; }
+
+    [JsonPropertyName("message_style")] public OnebotMessageStyle? MessageStyle { get; set; }
 }
 
 [Serializable]
-public class OneBotPrivateStringMsg(uint selfId, OneBotSender groupSender, string subType) : OneBotEntityBase(selfId, "message")
+public class OneBotPrivateStringMsg(uint selfId, OneBotSender groupSender, string subType, long time) : OneBotEntityBase(selfId, "message", time)
 {
     [JsonPropertyName("message_type")] public string MessageType { get; set; } = "private";
 
@@ -44,4 +46,6 @@ public class OneBotPrivateStringMsg(uint selfId, OneBotSender groupSender, strin
     [JsonPropertyName("sender")] public OneBotSender GroupSender { get; set; } = groupSender;
 
     [JsonPropertyName("target_id")] public uint TargetId { get; set; }
+
+    [JsonPropertyName("message_style")] public OnebotMessageStyle? MessageStyle { get; set; }
 }

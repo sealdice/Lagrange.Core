@@ -4,10 +4,13 @@ using Lagrange.Core.Internal.Context.Uploader;
 using Lagrange.Core.Internal.Event.Action;
 using Lagrange.Core.Internal.Event.Message;
 using Lagrange.Core.Internal.Event.System;
+using Lagrange.Core.Internal.Packets.Misc;
 using Lagrange.Core.Internal.Packets.Service.Highway;
+using Lagrange.Core.Internal.Packets.Service.Oidb.Common;
 using Lagrange.Core.Message;
 using Lagrange.Core.Message.Entity;
 using Lagrange.Core.Utility.Extension;
+using ProtoBuf;
 
 namespace Lagrange.Core.Internal.Context.Logic.Implementation;
 
@@ -277,30 +280,48 @@ internal class OperationLogic : LogicBase
         return (retCode, retMsg);
     }
 
-    public Task<bool> GroupFSUpload(uint groupUin, FileEntity fileEntity, string targetDirectory)
+    public async Task<OperationResult<object>> GroupFSUploadWithResult(uint groupUin, FileEntity fileEntity, string targetDirectory)
     {
         try
         {
-            return FileUploader.UploadGroup(Collection, MessageBuilder.Group(groupUin).Build(), fileEntity, targetDirectory);
+            (int retcode, string message) = await FileUploader.UploadGroup(Collection, MessageBuilder.Group(groupUin).Build(), fileEntity, targetDirectory);
+            return new OperationResult<object>
+            {
+                Retcode = retcode,
+                Message = message
+            };
         }
-        catch
+        catch (Exception e)
         {
-            return Task.FromResult(false);
+            return new OperationResult<object>
+            {
+                Retcode = -99999,
+                Message = e.Message
+            };
         }
     }
 
-    public async Task<bool> UploadFriendFile(uint targetUin, FileEntity fileEntity)
+    public async Task<OperationResult<object>> UploadFriendFileWithResult(uint targetUin, FileEntity fileEntity)
     {
         string? uid = await Collection.Business.CachingLogic.ResolveUid(null, targetUin);
         var chain = new MessageChain(targetUin, Collection.Keystore.Uid ?? "", uid ?? "") { fileEntity };
 
         try
         {
-            return await FileUploader.UploadPrivate(Collection, chain, fileEntity);
+            (int retcode, string message) = await FileUploader.UploadPrivate(Collection, chain, fileEntity);
+            return new OperationResult<object>
+            {
+                Retcode = retcode,
+                Message = message
+            };
         }
-        catch
+        catch (Exception e)
         {
-            return false;
+            return new OperationResult<object>
+            {
+                Retcode = -99999,
+                Message = e.Message
+            };
         }
     }
 
@@ -349,11 +370,15 @@ internal class OperationLogic : LogicBase
         return events.Count != 0 && ((RecallFriendMessageEvent)events[0]).ResultCode == 0;
     }
 
-    public async Task<List<BotGroupRequest>?> FetchGroupRequests()
+    public async Task<OperationResult<List<BotGroupRequest>>> FetchGroupRequestsWithResult()
     {
         var fetchRequestsEvent = FetchGroupRequestsEvent.Create();
         var events = await Collection.Business.SendEvent(fetchRequestsEvent);
-        if (events.Count == 0) return null;
+        if (events.Count == 0) return new OperationResult<List<BotGroupRequest>>
+        {
+            Retcode = -1,
+            Message = "No Events"
+        };
 
         var resolved = events.Cast<FetchGroupRequestsEvent>().SelectMany(e => e.Events).ToList();
         var results = new List<BotGroupRequest>();
@@ -382,7 +407,11 @@ internal class OperationLogic : LogicBase
             ));
         }
 
-        return results;
+        return new OperationResult<List<BotGroupRequest>>
+        {
+            Retcode = 0,
+            Data = results
+        };
 
         async Task<uint> ResolveUid(string? uid)
         {
@@ -393,6 +422,8 @@ internal class OperationLogic : LogicBase
             return e.Count == 0 ? 0 : ((FetchUserInfoEvent)e[0]).UserInfo.Uin;
         }
     }
+
+    public async Task<List<BotGroupRequest>?> FetchGroupRequests() => (await FetchGroupRequestsWithResult()).Data;
 
     public async Task<List<BotFriendRequest>?> FetchFriendRequests()
     {
@@ -499,16 +530,16 @@ internal class OperationLogic : LogicBase
         return events.Count == 0 ? null : ((FetchClientKeyEvent)events[0]).ClientKey;
     }
 
-    public async Task<bool> SetGroupRequest(uint groupUin, ulong sequence, uint type, bool accept, string reason)
+    public async Task<bool> SetGroupRequest(uint groupUin, ulong sequence, uint type, GroupRequestOperate operate, string reason)
     {
-        var inviteEvent = SetGroupRequestEvent.Create(accept, groupUin, sequence, type, reason);
+        var inviteEvent = SetGroupRequestEvent.Create(operate, groupUin, sequence, type, reason);
         var results = await Collection.Business.SendEvent(inviteEvent);
         return results.Count != 0 && results[0].ResultCode == 0;
     }
 
-    public async Task<bool> SetGroupFilteredRequest(uint groupUin, ulong sequence, uint type, bool accept, string reason)
+    public async Task<bool> SetGroupFilteredRequest(uint groupUin, ulong sequence, uint type, GroupRequestOperate operate, string reason)
     {
-        var inviteEvent = SetGroupFilteredRequestEvent.Create(accept, groupUin, sequence, type, reason);
+        var inviteEvent = SetGroupFilteredRequestEvent.Create(operate, groupUin, sequence, type, reason);
         var results = await Collection.Business.SendEvent(inviteEvent);
         return results.Count != 0 && results[0].ResultCode == 0;
     }
@@ -576,19 +607,11 @@ internal class OperationLogic : LogicBase
         var results = await Collection.Business.SendEvent(markAsReadEvent);
         return results.Count != 0 && ((MarkReadedEvent)results[0]).ResultCode == 0;
     }
-
-    public async Task<bool> FriendPoke(uint friendUin)
+    public async Task<bool> SendPoke(bool isGroup, uint peerUin, uint? targetUin = null)
     {
-        var friendPokeEvent = FriendPokeEvent.Create(friendUin);
-        var results = await Collection.Business.SendEvent(friendPokeEvent);
-        return results.Count != 0 && ((FriendPokeEvent)results[0]).ResultCode == 0;
-    }
-
-    public async Task<bool> GroupPoke(uint groupUin, uint friendUin)
-    {
-        var friendPokeEvent = GroupPokeEvent.Create(friendUin, groupUin);
-        var results = await Collection.Business.SendEvent(friendPokeEvent);
-        return results.Count != 0 && ((FriendPokeEvent)results[0]).ResultCode == 0;
+        var pokeEvent = PokeEvent.Create(isGroup, peerUin, targetUin);
+        var results = await Collection.Business.SendEvent(pokeEvent);
+        return results.Count != 0 && results[0].ResultCode == 0;
     }
 
     public async Task<bool> SetEssenceMessage(uint groupUin, uint sequence, uint random)
@@ -625,6 +648,14 @@ internal class OperationLogic : LogicBase
         var events = await Collection.Business.SendEvent(GetGroupInfoEvent.Create(uin));
         if (events.Count == 0) return (-1, "No Result", new());
         var @event = (GetGroupInfoEvent)events[0];
+        return (@event.ResultCode, @event.Message, @event.Info);
+    }
+
+    public async Task<(int code, string? message, BotStrangerGroupInfo info)> FetchStrangerGroupInfo(ulong uin)
+    {
+        var events = await Collection.Business.SendEvent(GetStrangerGroupInfoEvent.Create(uin));
+        if (events.Count == 0) return (-1, "No Result", new());
+        var @event = (GetStrangerGroupInfoEvent)events[0];
         return (@event.ResultCode, @event.Message, @event.Info);
     }
 
@@ -754,13 +785,13 @@ internal class OperationLogic : LogicBase
         if (code != 0)
             return (code, errMsg, null);
 
-        var recordGroupDownloadEvent = RecordGroupDownloadEvent.Create(groupUin, record!.MsgInfo!);
+        var recordGroupDownloadEvent = RecordGroupDownloadEvent.Create(record!.MsgInfo!.MsgInfoBody[0].Index);
         var @event = await Collection.Business.SendEvent(recordGroupDownloadEvent);
         if (@event.Count == 0) return (-1, "running event missing!", null);
 
         var finalResult = (RecordGroupDownloadEvent)@event[0];
         return finalResult.ResultCode == 0
-            ? (finalResult.ResultCode, string.Empty, finalResult.AudioUrl)
+            ? (finalResult.ResultCode, string.Empty, finalResult.Url)
             : (finalResult.ResultCode, "Failed to get group ai record", null);
     }
 
@@ -803,12 +834,12 @@ internal class OperationLogic : LogicBase
     public async Task<string> UploadImage(ImageEntity image)
     {
         await Collection.Highway.ManualUploadEntity(image);
-        var msgInfo = image.MsgInfo;
-        if (msgInfo is null) throw new Exception();
-        var downloadEvent = ImageDownloadEvent.Create(Collection.Keystore.Uid ?? "", msgInfo);
+        var msgInfo = image.MsgInfo ?? throw new Exception();
+
+        var downloadEvent = ImageDownloadEvent.Create(msgInfo.MsgInfoBody[0].Index);
         var result = await Collection.Business.SendEvent(downloadEvent);
         var ret = (ImageDownloadEvent)result[0];
-        return ret.ImageUrl;
+        return ret.Url;
     }
 
     public async Task<ImageOcrResult?> ImageOcr(string imageUrl)
@@ -863,6 +894,63 @@ internal class OperationLogic : LogicBase
         }
 
         var result = (SetPinGroupEvent)results[0];
+        return (result.ResultCode, result.Message);
+    }
+
+    public async Task<(int Code, string Message, string Url)> GetMediaUrl(string fileId)
+    {
+        int remainder = fileId.Length % 4;
+        int length = remainder == 0 ? fileId.Length : fileId.Length + (4 - remainder);
+        string base64 = fileId.Replace('-', '+').Replace('_', '/').PadRight(length, '=');
+        var info = Serializer.Deserialize<FileId>(Convert.FromBase64String(base64).AsSpan());
+
+        var index = new IndexNode
+        {
+            FileUuid = fileId,
+            StoreId = 1,
+            UploadTime = 0,
+            Ttl = info.Ttl,
+            SubType = 0
+        };
+        // Special processing video cover
+        if (info.AppId == 1414 || info.AppId == 1416) index.SubType = 100;
+
+        var results = await Collection.Business.SendEvent(info.AppId switch
+        {
+            1402 => RecordDownloadEvent.Create(index),
+            1403 => RecordGroupDownloadEvent.Create(index),
+
+            1413 => VideoDownloadEvent.Create(index),
+            1415 => VideoGroupDownloadEvent.Create(index),
+
+            1406 => ImageDownloadEvent.Create(index),
+            1407 => ImageGroupDownloadEvent.Create(index),
+
+            _ => throw new NotSupportedException($"Unsupported AppId: {info.AppId}")
+        });
+        if (results.Count == 0) return (-1, "No Result", string.Empty);
+
+        var result = (MediaDownloadEvent)results[0];
+        return (result.ResultCode, result.Message, result.Url);
+    }
+
+    public async Task<(int Code, string Message)> GroupRecallPoke(ulong groupUin, ulong messageSequence, ulong messageTime, ulong tipsSeqId)
+    {
+        var @event = RecallPokeEvent.Create(isGroup: true, groupUin, messageSequence, messageTime, tipsSeqId);
+        var results = await Collection.Business.SendEvent(@event);
+        if (results.Count == 0) return (-1, "No Result");
+
+        var result = (RecallPokeEvent)results[0];
+        return (result.ResultCode, result.Message);
+    }
+
+    public async Task<(int Code, string Message)> FriendRecallPoke(ulong peerUin, ulong messageSequence, ulong messageTime, ulong tipsSeqId)
+    {
+        var @event = RecallPokeEvent.Create(isGroup: false, peerUin, messageSequence, messageTime, tipsSeqId);
+        var results = await Collection.Business.SendEvent(@event);
+        if (results.Count == 0) return (-1, "No Result");
+
+        var result = (RecallPokeEvent)results[0];
         return (result.ResultCode, result.Message);
     }
 }

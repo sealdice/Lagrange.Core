@@ -43,6 +43,8 @@ public partial class EventInvoker : IDisposable
         RegisterEvent((GroupTodoEvent e) => OnGroupTodoEvent?.Invoke(context, e));
         RegisterEvent((GroupMemberEnterEvent e) => OnGroupMemberEnterEvent?.Invoke(context, e));
         RegisterEvent((PinChangedEvent e) => OnPinChangedEvent?.Invoke(context, e));
+        RegisterEvent((GroupRecallPokeEvent e) => OnGroupRecallPokeEvent?.Invoke(context, e));
+        RegisterEvent((FriendRecallPokeEvent e) => OnFriendRecallPokeEvent?.Invoke(context, e));
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -59,7 +61,7 @@ public partial class EventInvoker : IDisposable
             }
             catch (Exception ex)
             {
-                PostEvent(new BotLogEvent(Tag, LogLevel.Exception, $"{ex.StackTrace}\n{ex.Message}"));
+                PostEvent(new BotLogEvent(Tag, LogLevel.Exception, $"{ex}"));
             }
         });
     }

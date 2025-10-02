@@ -1,5 +1,4 @@
 using Lagrange.Core.Common.Entity;
-using Lagrange.Core.Event.EventArg;
 using Lagrange.Core.Message;
 using Lagrange.Core.Message.Entity;
 
@@ -83,16 +82,22 @@ public static class GroupExt
         => bot.ContextCollection.Business.OperationLogic.InviteGroup(groupUin, invitedUins);
 
     public static Task<bool> SetGroupRequest(this BotContext bot, BotGroupRequest request, bool accept = true, string reason = "")
-        => bot.ContextCollection.Business.OperationLogic.SetGroupRequest(request.GroupUin, request.Sequence, (uint)request.EventType, accept, reason);
+        => bot.ContextCollection.Business.OperationLogic.SetGroupRequest(request.GroupUin, request.Sequence, (uint)request.EventType, accept ? GroupRequestOperate.Allow : GroupRequestOperate.Deny, reason);
+
+    public static Task<bool> SetGroupRequest(this BotContext bot, BotGroupRequest request, GroupRequestOperate operate, string reason = "")
+        => bot.ContextCollection.Business.OperationLogic.SetGroupRequest(request.GroupUin, request.Sequence, (uint)request.EventType, operate, reason);
 
     public static Task<bool> SetGroupFilteredRequest(this BotContext bot, BotGroupRequest request, bool accept = true, string reason = "")
-        => bot.ContextCollection.Business.OperationLogic.SetGroupFilteredRequest(request.GroupUin, request.Sequence, (uint)request.EventType, accept, reason);
+        => bot.ContextCollection.Business.OperationLogic.SetGroupFilteredRequest(request.GroupUin, request.Sequence, (uint)request.EventType, accept ? GroupRequestOperate.Allow : GroupRequestOperate.Deny, reason);
+
+    public static Task<bool> SetGroupFilteredRequest(this BotContext bot, BotGroupRequest request, GroupRequestOperate operate, string reason = "")
+        => bot.ContextCollection.Business.OperationLogic.SetGroupFilteredRequest(request.GroupUin, request.Sequence, (uint)request.EventType, operate, reason);
 
     public static Task<bool> SetFriendRequest(this BotContext bot, BotFriendRequest request, bool accept = true)
         => bot.ContextCollection.Business.OperationLogic.SetFriendRequest(request.SourceUid, accept);
 
-    public static Task<bool> GroupPoke(this BotContext bot, uint groupUin, uint friendUin)
-        => bot.ContextCollection.Business.OperationLogic.GroupPoke(groupUin, friendUin);
+    public static Task<bool> GroupPoke(this BotContext bot, uint peerUin, uint targetUin)
+        => bot.ContextCollection.Business.OperationLogic.SendPoke(true, peerUin, targetUin);
 
     public static Task<bool> SetEssenceMessage(this BotContext bot, MessageChain chain)
         => bot.ContextCollection.Business.OperationLogic.SetEssenceMessage(chain.GroupUin ?? 0, chain.Sequence, (uint)(chain.MessageId & 0xFFFFFFFF));
@@ -108,10 +113,10 @@ public static class GroupExt
 
     public static Task<bool> GroupSetMessageReaction(this BotContext bot, uint groupUin, uint sequence, string code, bool isSet)
         => bot.ContextCollection.Business.OperationLogic.SetMessageReaction(groupUin, sequence, code, isSet);
-    
+
     public static Task<bool> GroupSetAvatar(this BotContext bot, uint groupUin, ImageEntity imageEntity)
         => bot.ContextCollection.Business.OperationLogic.GroupSetAvatar(groupUin, imageEntity);
-    
+
     public static Task<(uint, uint)> GroupRemainAtAll(this BotContext bot, uint groupUin)
         => bot.ContextCollection.Business.OperationLogic.GroupRemainAtAll(groupUin);
 
@@ -144,8 +149,11 @@ public static class GroupExt
     public static Task<(int RetCode, string RetMsg)> GroupFSRenameFolder(this BotContext bot, uint groupUin, string folderId, string newFolderName)
         => bot.ContextCollection.Business.OperationLogic.GroupFSRenameFolder(groupUin, folderId, newFolderName);
 
-    public static Task<bool> GroupFSUpload(this BotContext bot, uint groupUin, FileEntity fileEntity, string targetDirectory = "/")
-        => bot.ContextCollection.Business.OperationLogic.GroupFSUpload(groupUin, fileEntity, targetDirectory);
+    public static async Task<bool> GroupFSUpload(this BotContext bot, uint groupUin, FileEntity fileEntity, string targetDirectory = "/")
+        => (await GroupFSUploadWithResult(bot, groupUin, fileEntity, targetDirectory)).IsSuccess;
+
+    public static Task<OperationResult<object>> GroupFSUploadWithResult(this BotContext bot, uint groupUin, FileEntity fileEntity, string targetDirectory = "/")
+        => bot.ContextCollection.Business.OperationLogic.GroupFSUploadWithResult(groupUin, fileEntity, targetDirectory);
 
     #endregion
 }

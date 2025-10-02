@@ -1,3 +1,5 @@
+using System.Text.Json;
+using System.Web;
 using Lagrange.Core.Event;
 using Lagrange.Core.Event.EventArg;
 using Lagrange.Core.Internal.Context.Attributes;
@@ -6,10 +8,13 @@ using Lagrange.Core.Internal.Event.Action;
 using Lagrange.Core.Internal.Event.Message;
 using Lagrange.Core.Internal.Event.Notify;
 using Lagrange.Core.Internal.Event.System;
+using Lagrange.Core.Internal.Packets.Misc;
+using Lagrange.Core.Internal.Packets.Service.Oidb.Common;
 using Lagrange.Core.Internal.Service;
 using Lagrange.Core.Message;
 using Lagrange.Core.Message.Entity;
 using Lagrange.Core.Message.Filter;
+using ProtoBuf;
 using FriendPokeEvent = Lagrange.Core.Event.EventArg.FriendPokeEvent;
 using GroupPokeEvent = Lagrange.Core.Event.EventArg.GroupPokeEvent;
 
@@ -43,6 +48,8 @@ namespace Lagrange.Core.Internal.Context.Logic.Implementation;
 [EventSubscribe(typeof(SysPinChangedEvent))]
 [EventSubscribe(typeof(FetchPinsEvent))]
 [EventSubscribe(typeof(SetPinFriendEvent))]
+[EventSubscribe(typeof(GroupSysRecallPokeEvent))]
+[EventSubscribe(typeof(FriendSysRecallPokeEvent))]
 [BusinessLogic("MessagingLogic", "Manage the receiving and sending of messages and notifications")]
 internal class MessagingLogic : LogicBase
 {
@@ -62,8 +69,29 @@ internal class MessagingLogic : LogicBase
                 MessageFilter.Filter(push.Chain);
 
                 var chain = push.Chain;
-                Collection.Log.LogVerbose(Tag, chain.ToPreviewString());
 
+                // Intercept group invitation
+                if (chain.Count == 1 && chain[0] is LightAppEntity
+                    {
+                        AppName: "com.tencent.qun.invite" or "com.tencent.tuwen.lua"
+                    } app)
+                {
+                    using var document = JsonDocument.Parse(app.Payload);
+                    var root = document.RootElement;
+
+                    string url = root.GetProperty("meta").GetProperty("news").GetProperty("jumpUrl").GetString()
+                        ?? throw new Exception("sb tx! Is this 'com.tencent.qun.invite' or 'com.tencent.tuwen.lua'?");
+                    var query = HttpUtility.ParseQueryString(new Uri(url).Query);
+                    uint groupUin = uint.Parse(query["groupcode"]
+                        ?? throw new Exception("sb tx! Is this '/group/invite_join'?"));
+                    ulong sequence = ulong.Parse(query["msgseq"]
+                        ?? throw new Exception("sb tx! Is this '/group/invite_join'?"));
+
+                    Collection.Invoker.PostEvent(new GroupInvitationEvent(groupUin, chain.FriendUin, sequence));
+                    break;
+                }
+
+                Collection.Log.LogVerbose(Tag, chain.ToPreviewString());
                 EventBase args = push.Chain.Type switch
                 {
                     MessageChain.MessageType.Friend => new FriendMessageEvent(chain),
@@ -137,7 +165,17 @@ internal class MessagingLogic : LogicBase
             }
             case GroupSysPokeEvent poke:
             {
-                var pokeArgs = new GroupPokeEvent(poke.GroupUin, poke.OperatorUin, poke.TargetUin, poke.Action, poke.Suffix, poke.ActionImgUrl);
+                var pokeArgs = new GroupPokeEvent(
+                    poke.GroupUin,
+                    poke.OperatorUin,
+                    poke.TargetUin,
+                    poke.Action,
+                    poke.Suffix,
+                    poke.ActionImgUrl,
+                    poke.MessageSequence,
+                    poke.MessageTime,
+                    poke.TipsSeqId
+                );
                 Collection.Invoker.PostEvent(pokeArgs);
                 break;
             }
@@ -223,7 +261,17 @@ internal class MessagingLogic : LogicBase
             }
             case FriendSysPokeEvent poke:
             {
-                var pokeArgs = new FriendPokeEvent(poke.OperatorUin, poke.TargetUin, poke.Action, poke.Suffix, poke.ActionImgUrl);
+                var pokeArgs = new FriendPokeEvent(
+                    poke.OperatorUin,
+                    poke.TargetUin,
+                    poke.Action,
+                    poke.Suffix,
+                    poke.ActionImgUrl,
+                    poke.PeerUin,
+                    poke.MessageSequence,
+                    poke.MessageTime,
+                    poke.TipsSeqId
+                );
                 Collection.Invoker.PostEvent(pokeArgs);
                 break;
             }
@@ -273,6 +321,21 @@ internal class MessagingLogic : LogicBase
 
                 break;
             }
+            case GroupSysRecallPokeEvent recall:
+            {
+                uint operatorUin = await Collection.Business.CachingLogic.ResolveUin(null, recall.OperatorUid) ?? 0;
+                var @event = new GroupRecallPokeEvent(recall.GroupUin, operatorUin, recall.TipsSeqId);
+                Collection.Invoker.PostEvent(@event);
+                break;
+            }
+            case FriendSysRecallPokeEvent recall:
+            {
+                uint peerUin = await Collection.Business.CachingLogic.ResolveUin(null, recall.PeerUid) ?? 0;
+                uint operatorUin = await Collection.Business.CachingLogic.ResolveUin(null, recall.OperatorUid) ?? 0;
+                var @event = new FriendRecallPokeEvent(peerUin, operatorUin, recall.TipsSeqId);
+                Collection.Invoker.PostEvent(@event);
+                break;
+            }
         }
     }
 
@@ -287,6 +350,12 @@ internal class MessagingLogic : LogicBase
                     await ResolveChainMetadata(chain);
                     await ResolveOutgoingChain(chain);
                     await Collection.Highway.UploadResources(chain);
+
+                    foreach (var forward in chain.OfType<ForwardEntity>())
+                    {
+                        if (chain.IsGroup) await Collection.Highway.UploadGroupResources(forward.Chain, chain.GroupUin ?? 0);
+                        else await Collection.Highway.UploadPrivateResources(forward.Chain, chain.FriendInfo?.Uid ?? "");
+                    }
                 }
                 break;
             }
@@ -351,60 +420,112 @@ internal class MessagingLogic : LogicBase
                 }
                 case RecordEntity { MsgInfo: not null } record:
                 {
-                    var @event = chain.IsGroup
-                        ? RecordGroupDownloadEvent.Create(chain.GroupUin ?? 0, record.MsgInfo)
-                        : RecordDownloadEvent.Create(chain.Uid ?? string.Empty, record.MsgInfo);
+                    MediaDownloadEvent @event = chain.IsGroup
+                        ? RecordGroupDownloadEvent.Create(record.MsgInfo.MsgInfoBody[0].Index)
+                        : RecordDownloadEvent.Create(record.MsgInfo.MsgInfoBody[0].Index);
 
                     var results = await Collection.Business.SendEvent(@event);
                     if (results.Count != 0)
                     {
-                        var result = (RecordDownloadEvent)results[0];
-                        record.AudioUrl = result.AudioUrl;
+                        var result = (MediaDownloadEvent)results[0];
+                        record.AudioUrl = result.Url;
                     }
 
                     break;
                 }
                 case RecordEntity { AudioUuid: not null } record:
                 {
-                    var @event = chain.IsGroup
-                        ? RecordGroupDownloadEvent.Create(chain.GroupUin ?? 0, record.AudioUuid)
-                        : RecordDownloadEvent.Create(chain.Uid ?? string.Empty, record.AudioUuid);
+                    int remainder = record.AudioUuid.Length % 4;
+                    int length = remainder == 0 ? record.AudioUuid.Length : record.AudioUuid.Length + (4 - remainder);
+                    string base64 = record.AudioUuid.Replace('-', '+').Replace('_', '/').PadRight(length, '=');
+                    var info = Serializer.Deserialize<FileId>(Convert.FromBase64String(base64).AsSpan());
 
-                    var results = await Collection.Business.SendEvent(@event);
+                    var index = new IndexNode
+                    {
+                        FileUuid = record.AudioUuid,
+                        StoreId = 1,
+                        UploadTime = 0,
+                        Ttl = info.Ttl,
+                        SubType = 0
+                    };
+
+                    var results = await Collection.Business.SendEvent(info.AppId switch
+                    {
+                        1402 => RecordDownloadEvent.Create(index),
+                        1403 => RecordGroupDownloadEvent.Create(index),
+
+                        _ => throw new NotSupportedException($"Unsupported Record AppId: {info.AppId}"),
+                    });
+
                     if (results.Count != 0)
                     {
-                        var result = (RecordDownloadEvent)results[0];
-                        record.AudioUrl = result.AudioUrl;
+                        var result = (MediaDownloadEvent)results[0];
+                        record.AudioUrl = result.Url;
                     }
 
                     break;
                 }
-                case VideoEntity { VideoUuid: not null } video:
+                case VideoEntity video when !video.VideoUrl.Contains("&rkey=") && video.MsgInfo is not null:
                 {
-                    string uid = (chain.IsGroup
-                        ? await Collection.Business.CachingLogic.ResolveUid(chain.GroupUin, chain.FriendUin)
-                        : chain.Uid) ?? "";
-                    var @event = VideoDownloadEvent.Create(video.VideoUuid, uid, video.FilePath, "", "", chain.IsGroup);
+                    MediaDownloadEvent @event = video.IsGroup
+                        ? VideoGroupDownloadEvent.Create(video.MsgInfo.MsgInfoBody[0].Index)
+                        : VideoDownloadEvent.Create(video.MsgInfo.MsgInfoBody[0].Index);
+
                     var results = await Collection.Business.SendEvent(@event);
                     if (results.Count != 0)
                     {
-                        var result = (VideoDownloadEvent)results[0];
-                        video.VideoUrl = result.AudioUrl;
+                        var result = (MediaDownloadEvent)results[0];
+                        video.VideoUrl = result.Url;
                     }
 
                     break;
                 }
                 case ImageEntity image when !image.ImageUrl.Contains("&rkey=") && image.MsgInfo is not null:
                 {
-                    var @event = image.IsGroup
-                        ? ImageGroupDownloadEvent.Create(chain.GroupUin ?? 0, image.MsgInfo)
-                        : ImageDownloadEvent.Create(chain.Uid ?? string.Empty, image.MsgInfo);
+                    MediaDownloadEvent @event = image.IsGroup
+                        ? ImageGroupDownloadEvent.Create(image.MsgInfo.MsgInfoBody[0].Index)
+                        : ImageDownloadEvent.Create(image.MsgInfo.MsgInfoBody[0].Index);
 
                     var results = await Collection.Business.SendEvent(@event);
                     if (results.Count != 0)
                     {
-                        var result = (ImageDownloadEvent)results[0];
-                        image.ImageUrl = result.ImageUrl;
+                        var result = (MediaDownloadEvent)results[0];
+                        image.ImageUrl = result.Url;
+                    }
+
+                    break;
+                }
+                case ForwardEntity forward:
+                {
+                    if (chain is { GroupUin: not null })
+                    {
+                        var events = await Collection.Business.SendEvent(GetGroupMessageEvent.Create(
+                            chain.GroupUin.Value,
+                            forward.Sequence,
+                            forward.Sequence
+                        ));
+
+                        if (events.Count < 1) break;
+                        if (events[0] is not GetGroupMessageEvent @event) break;
+                        if (@event.ResultCode != 0) break;
+                        if (@event.Chains.Count < 1) break;
+
+                        forward.Chain = @event.Chains[0];
+                    }
+                    else
+                    {
+                        var events = await Collection.Business.SendEvent(GetC2cMessageEvent.Create(
+                            chain.Uid ?? "",
+                            forward.Sequence,
+                            forward.Sequence
+                        ));
+
+                        if (events.Count < 1) break;
+                        if (events[0] is not GetC2cMessageEvent @event) break;
+                        if (@event.ResultCode != 0) break;
+                        if (@event.Chains.Count < 1) break;
+
+                        forward.Chain = @event.Chains[0];
                     }
 
                     break;
@@ -434,7 +555,7 @@ internal class MessagingLogic : LogicBase
                         break;
 
                     string name = (await cache.GetCachedFaceEntity(bounceFace.FaceId))?.QDes ?? string.Empty;
-                    
+
                     // Because the name is used as a preview text, it should not start with '/'
                     // But the QDes of the face may start with '/', so remove it
                     if (name.StartsWith('/'))

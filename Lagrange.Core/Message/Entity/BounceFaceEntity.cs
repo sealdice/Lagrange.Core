@@ -1,9 +1,7 @@
-﻿using System.Text;
-using Lagrange.Core.Common.Entity;
+﻿using Lagrange.Core.Common.Entity;
 using Lagrange.Core.Internal.Packets.Message.Element;
 using Lagrange.Core.Internal.Packets.Message.Element.Implementation;
 using Lagrange.Core.Internal.Packets.Message.Element.Implementation.Extra;
-using Lagrange.Core.Utility.Extension;
 using ProtoBuf;
 
 namespace Lagrange.Core.Message.Entity;
@@ -106,7 +104,7 @@ public class BounceFaceEntity : IMessageEntity
         return new BounceFaceEntity(extra.Face.FaceId, extra.Count, extra.Name);
     }
 
-    public string ToPreviewString() => "$[BounceFace | Name: {Name}({FaceId}) | Count: {Count}]";
+    public string ToPreviewString() => $"[BounceFace | Name: {Name}({FaceId}) | Count: {Count}]";
 
     public string ToPreviewText() => $"[{Name}]x{Count}";
 }

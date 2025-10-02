@@ -26,8 +26,10 @@ public class ImageEntity : IMessageEntity
 
     public string ImageUrl { get; set; } = string.Empty;
 
+    public string? ImageUuid { get; set; }
+
     internal Lazy<Stream>? ImageStream { get; set; }
-    
+
     internal MsgInfo? MsgInfo { get; set; }
 
     internal NotOnlineImage? CompatImage { get; set; }
@@ -102,8 +104,9 @@ public class ImageEntity : IMessageEntity
                 ImageSize = index.Info.FileSize,
                 MsgInfo = extra,
                 SubType = (int)extra.ExtBizInfo.Pic.BizType,
-                IsGroup = extra.ExtBizInfo.Pic.BytesPbReserveTroop != null,
+                IsGroup = extra.ExtBizInfo.Pic.ToScene == 2,
                 Summary = string.IsNullOrEmpty(extra.ExtBizInfo.Pic.TextSummary) ? "[图片]" : extra.ExtBizInfo.Pic.TextSummary,
+                ImageUuid = index.FileUuid
             };
         }
 
