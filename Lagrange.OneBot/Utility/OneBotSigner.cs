@@ -18,7 +18,7 @@ public class OneBotSigner : SignProvider
 
     private readonly ILogger<OneBotSigner> _logger;
 
-    private const string Url = "https://sign.lagrangecore.org/api/sign/30366";
+    private const string Url = "https://sign.lagrangecore.org/api/sign/39038";
 
     private readonly string? _signServer;
 
@@ -38,8 +38,8 @@ public class OneBotSigner : SignProvider
         _signServer = string.IsNullOrEmpty(config["SignServerUrl"]) ? Url : config["SignServerUrl"];
         if (_signServer == "https://lwxmagic.sealdice.com/api/sign") {
             _signServer = "$(SIGN_SERVER_DEFAULT)";
-        } else if (_signServer == "https://lwxmagic.sealdice.com/api/sign/25765") {
-            _signServer = "$(SIGN_SERVER_DEFAULT)/25765";
+        } else if (_signServer == "https://lwxmagic.sealdice.com/api/sign/39038") {
+            _signServer = "$(SIGN_SERVER_DEFAULT)/39038";
         }
 
         string? signProxyUrl = config["SignProxyUrl"]; // Only support HTTP proxy
