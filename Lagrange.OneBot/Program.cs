@@ -77,7 +77,9 @@ internal abstract class Program
             Console.WriteLine(
                 "Please Edit the appsettings.json to set configs and press any key to continue"
             );
-            Console.ReadKey(true);
+            // 此时选择退出程序，因为ReadKey在某些平台会崩溃
+            // Console.ReadKey(true);
+            return;
         }
 
         await Host.CreateApplicationBuilder()

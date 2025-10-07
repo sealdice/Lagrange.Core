@@ -88,14 +88,15 @@ public static class HostApplicationBuilderExtension
                 string? dpath = configuration["ConfigPath:Database"];
 
                 // Check LiteDB
-                string litedb = dpath ?? $"./lagrange-{configuration["Account:Uin"]}.db";
-                if (File.Exists(litedb)) {
-                    logger.LogCritical("Found LiteDB database, currently Lagrange.OneBot has been migrated to Realm database");
-                    logger.LogCritical("Please delete {} if you no longer need the data in the database; otherwise, please refer to https://lagrangedev.github.io/Lagrange.Doc/Lagrange.OneBot/#从-litedb-迁移到-realm to migrate the database to Realm", litedb);
-                    logger.LogCritical("Press any key to terminate the program");
-                    Console.ReadKey(true);
-                    host.StopAsync(default);
-                }
+                // 直接无视LiteDB，下面的 ReadKey 在某些平台会崩溃
+                // string litedb = dpath ?? $"./lagrange-{configuration["Account:Uin"]}.db";
+                // if (File.Exists(litedb)) {
+                //     logger.LogCritical("Found LiteDB database, currently Lagrange.OneBot has been migrated to Realm database");
+                //     logger.LogCritical("Please delete {} if you no longer need the data in the database; otherwise, please refer to https://lagrangedev.github.io/Lagrange.Doc/Lagrange.OneBot/#从-litedb-迁移到-realm to migrate the database to Realm", litedb);
+                //     logger.LogCritical("Press any key to terminate the program");
+                //     Console.ReadKey(true);
+                //     host.StopAsync(default);
+                // }
 
                 string prefix = dpath ?? $"./lagrange-{configuration["Account:Uin"]}-db";
                 if (!Directory.Exists(prefix)) Directory.CreateDirectory(prefix);
