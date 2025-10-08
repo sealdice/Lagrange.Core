@@ -14,8 +14,12 @@ using static Lagrange.Core.Message.MessageChain;
 namespace Lagrange.OneBot.Core.Operation.Message;
 
 [Operation("send_msg")]
-public sealed class SendMessageOperation(MessageCommon common, RealmHelper realm) : IOperation
+public sealed class SendMessageOperation(MessageCommon common, RealmHelper? realm = null) : IOperation
 {
+#if !ONEBOT_DISABLE_REALM
+    private readonly RealmHelper _realm = realm ?? throw new ArgumentNullException(nameof(realm));
+#endif
+
     public async Task<OneBotResult> HandleOperation(BotContext context, JsonNode? payload)
     {
         var chain = payload.Deserialize<OneBotMessageBase>(SerializerOptions.DefaultOptions) switch
@@ -33,9 +37,10 @@ public sealed class SendMessageOperation(MessageCommon common, RealmHelper realm
 
         int obid = MessageRecord.CalcMessageHash(result.MessageId, result.Sequence ?? 0);
 
+#if !ONEBOT_DISABLE_REALM
         if (!chain.IsGroup)
         {
-            realm.Do(realm => realm.Write(() => realm.Add(new MessageRecord
+            _realm.Do(realm => realm.Write(() => realm.Add(new MessageRecord
             {
                 Id = obid,
                 Type = MessageType.Friend,
@@ -48,6 +53,7 @@ public sealed class SendMessageOperation(MessageCommon common, RealmHelper realm
                 Entities = MessagePackSerializer.Serialize<List<IMessageEntity>>(chain, MessageRecord.OPTIONS)
             })));
         }
+#endif
 
         return new OneBotResult(new OneBotMessageResponse(obid), 0, "ok");
     }

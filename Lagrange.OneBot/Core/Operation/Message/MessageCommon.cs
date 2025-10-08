@@ -22,7 +22,7 @@ public partial class MessageCommon
 
     private readonly Dictionary<string, SegmentBase> _typeToSegment;
 
-    public MessageCommon(RealmHelper realm, ILogger<MessageCommon> logger)
+    public MessageCommon(RealmHelper? realm, ILogger<MessageCommon> logger)
     {
         _logger = logger;
         _typeToSegment = new Dictionary<string, SegmentBase>();

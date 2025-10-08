@@ -13,13 +13,21 @@ using Lagrange.OneBot.Utility;
 namespace Lagrange.OneBot.Core.Operation.Message;
 
 [Operation("get_friend_msg_history")]
-public class GetFriendMessageHistoryOperation(RealmHelper realm, MessageService message) : IOperation
+public class GetFriendMessageHistoryOperation(MessageService message, RealmHelper? realm = null) : IOperation
 {
+#if !ONEBOT_DISABLE_REALM
+    private readonly RealmHelper _realm = realm ?? throw new ArgumentNullException(nameof(realm));
+#endif
+    private readonly MessageService _message = message;
+
     public async Task<OneBotResult> HandleOperation(BotContext context, JsonNode? payload)
     {
+#if ONEBOT_DISABLE_REALM
+        return new OneBotResult(null, 1404, "realm disabled");
+#else
         if (payload.Deserialize<OneBotFriendMsgHistory>(SerializerOptions.DefaultOptions) is { } history)
         {
-            var chain = realm.Do<MessageChain>(realm => history.MessageId == 0
+            var chain = _realm.Do<MessageChain>(realm => history.MessageId == 0
                 ? realm.All<MessageRecord>()
                     .Where(record => record.FromUinLong == history.UserId)
                     .OrderByDescending(record => record.Time)
@@ -30,12 +38,13 @@ public class GetFriendMessageHistoryOperation(RealmHelper realm, MessageService 
             if (await context.GetRoamMessage(chain, history.Count) is { } results)
             {
                 var messages = results
-                    .Select(x => message.ConvertToPrivateMsg(context.BotUin, x))
+                    .Select(x => _message.ConvertToPrivateMsg(context.BotUin, x))
                     .ToList();
                 return new OneBotResult(new OneBotFriendMsgHistoryResponse(messages), 0, "ok");
             }
         }
 
         throw new Exception();
+#endif
     }
 }

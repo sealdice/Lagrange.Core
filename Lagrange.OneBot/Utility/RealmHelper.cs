@@ -1,3 +1,4 @@
+#if !ONEBOT_DISABLE_REALM
 using Realms;
 
 namespace Lagrange.OneBot.Utility;
@@ -11,10 +12,17 @@ public class RealmHelper(RealmConfiguration configuration)
         using Realm realm = Realm.GetInstance(_configuration);
         return action(realm);
     }
-    
+
     public void Do(Action<Realm> action)
     {
         using Realm realm = Realm.GetInstance(_configuration);
         action(realm);
     }
 }
+#else
+namespace Lagrange.OneBot.Utility;
+
+public class RealmHelper
+{
+}
+#endif

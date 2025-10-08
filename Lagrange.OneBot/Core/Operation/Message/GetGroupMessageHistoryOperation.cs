@@ -12,13 +12,21 @@ using Lagrange.OneBot.Utility;
 namespace Lagrange.OneBot.Core.Operation.Message;
 
 [Operation("get_group_msg_history")]
-public class GetGroupMessageHistoryOperation(RealmHelper realm, MessageService message) : IOperation
+public class GetGroupMessageHistoryOperation(MessageService message, RealmHelper? realm = null) : IOperation
 {
+#if !ONEBOT_DISABLE_REALM
+    private readonly RealmHelper _realm = realm ?? throw new ArgumentNullException(nameof(realm));
+#endif
+    private readonly MessageService _message = message;
+
     public async Task<OneBotResult> HandleOperation(BotContext context, JsonNode? payload)
     {
+#if ONEBOT_DISABLE_REALM
+        return new OneBotResult(null, 1404, "realm disabled");
+#else
         if (payload.Deserialize<OneBotGroupMsgHistory>(SerializerOptions.DefaultOptions) is { } history)
         {
-            var sequence = realm.Do(realm => history.MessageId == 0
+            var sequence = _realm.Do(realm => history.MessageId == 0
                 ? realm.All<MessageRecord>()
                     .Where(record => record.ToUinLong == history.GroupId)
                     .OrderByDescending(x => x.Time)
@@ -32,12 +40,13 @@ public class GetGroupMessageHistoryOperation(RealmHelper realm, MessageService m
             if (await context.GetGroupMessage(history.GroupId, start, (uint)sequence) is { } results)
             {
                 var messages = results
-                    .Select(x => message.ConvertToGroupMsg(context.BotUin, x))
+                    .Select(x => _message.ConvertToGroupMsg(context.BotUin, x))
                     .ToList();
                 return new OneBotResult(new OneBotGroupMsgHistoryResponse(messages), 0, "ok");
             }
         }
 
         throw new Exception();
+#endif
     }
 }

@@ -12,8 +12,15 @@ using static Lagrange.Core.Message.MessageChain;
 
 namespace Lagrange.OneBot.Core.Notify;
 
-public sealed class NotifyService(BotContext bot, ILogger<NotifyService> logger, LagrangeWebSvcCollection service, RealmHelper realm)
+public sealed class NotifyService(
+    BotContext bot,
+    ILogger<NotifyService> logger,
+    LagrangeWebSvcCollection service,
+    RealmHelper? realm = null)
 {
+#if !ONEBOT_DISABLE_REALM
+    private readonly RealmHelper _realm = realm ?? throw new ArgumentNullException(nameof(realm));
+#endif
     public void RegisterEvents()
     {
         bot.Invoker.OnGroupMessageReceived += async (_, @event) =>
@@ -160,11 +167,12 @@ public sealed class NotifyService(BotContext bot, ILogger<NotifyService> logger,
             });
         };
 
+#if !ONEBOT_DISABLE_REALM
         bot.Invoker.OnFriendRecallEvent += async (_, @event) =>
         {
             logger.LogInformation(@event.ToString());
 
-            var sequence = realm.Do(realm => realm.All<MessageRecord>()
+            var sequence = _realm.Do(realm => realm.All<MessageRecord>()
                 .FirstOrDefault(record => record.TypeInt == (int)MessageType.Friend
                     && record.FromUinLong == @event.FriendUin
                     && record.ClientSequenceLong == @event.ClientSequence
@@ -183,6 +191,7 @@ public sealed class NotifyService(BotContext bot, ILogger<NotifyService> logger,
                 Tip = @event.Tip
             });
         };
+#endif
 
         bot.Invoker.OnFriendPokeEvent += async (_, @event) =>
         {
@@ -225,11 +234,12 @@ public sealed class NotifyService(BotContext bot, ILogger<NotifyService> logger,
             });
         };
 
+#if !ONEBOT_DISABLE_REALM
         bot.Invoker.OnGroupReactionEvent += async (bot, @event) =>
         {
             logger.LogInformation(@event.ToString());
 
-            var id = realm.Do(realm => realm.All<MessageRecord>()
+            var id = _realm.Do(realm => realm.All<MessageRecord>()
                 .FirstOrDefault(record => record.TypeInt == (int)MessageType.Group
                     && record.ToUinLong == @event.TargetGroupUin
                     && record.SequenceLong == @event.TargetSequence)?
@@ -256,6 +266,9 @@ public sealed class NotifyService(BotContext bot, ILogger<NotifyService> logger,
                 @event.Count
             ));
         };
+#else
+        _ = realm;
+#endif
 
         bot.Invoker.OnGroupNameChangeEvent += async (bot, @event) =>
         {

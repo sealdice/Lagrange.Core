@@ -15,8 +15,12 @@ using static Lagrange.Core.Message.MessageChain;
 namespace Lagrange.OneBot.Core.Operation.Message;
 
 [Operation("send_private_forward_msg")]
-public class SendPrivateForwardOperation(MessageCommon common, RealmHelper realm) : IOperation
+public class SendPrivateForwardOperation(MessageCommon common, RealmHelper? realm = null) : IOperation
 {
+#if !ONEBOT_DISABLE_REALM
+    private readonly RealmHelper _realm = realm ?? throw new ArgumentNullException(nameof(realm));
+#endif
+
     public async Task<OneBotResult> HandleOperation(BotContext context, JsonNode? payload)
     {
         if (payload.Deserialize<OneBotPrivateForward>(SerializerOptions.DefaultOptions) is { } forward)
@@ -33,7 +37,8 @@ public class SendPrivateForwardOperation(MessageCommon common, RealmHelper realm
 
             int obid = MessageRecord.CalcMessageHash(result.MessageId, result.Sequence ?? 0);
 
-            realm.Do(realm => realm.Write(() => realm.Add(new MessageRecord
+#if !ONEBOT_DISABLE_REALM
+            _realm.Do(realm => realm.Write(() => realm.Add(new MessageRecord
             {
                 Id = obid,
                 Type = MessageType.Friend,
@@ -45,6 +50,7 @@ public class SendPrivateForwardOperation(MessageCommon common, RealmHelper realm
                 ToUin = chain.FriendUin,
                 Entities = MessagePackSerializer.Serialize<List<IMessageEntity>>(chain, MessageRecord.OPTIONS)
             })));
+#endif
 
             return new OneBotResult(new OneBotForwardResponse(obid, multi.ResId ?? ""), 0, "ok");
         }

@@ -22,6 +22,7 @@ public partial class ReplySegment : SegmentBase
 
     public override void Build(MessageBuilder builder, SegmentBase segment)
     {
+#if !ONEBOT_DISABLE_REALM
         if (segment is ReplySegment reply && Realm is not null)
         {
             var chain = Realm.Do<MessageChain>(realm => realm.All<MessageRecord>()
@@ -35,10 +36,12 @@ public partial class ReplySegment : SegmentBase
 
             builder.Forward(reply.TargetChain);
         }
+#endif
     }
 
-    public override SegmentBase FromEntity(MessageChain chain, IMessageEntity entity)
+    public override SegmentBase? FromEntity(MessageChain chain, IMessageEntity entity)
     {
+#if !ONEBOT_DISABLE_REALM
         if (entity is not ForwardEntity forward || Realm is null) throw new ArgumentException("The entity is not a forward entity.");
 
         int? id;
@@ -55,5 +58,8 @@ public partial class ReplySegment : SegmentBase
         }
 
         return new ReplySegment { MessageId = (id ?? 0).ToString() };
+#else
+        return null;
+#endif
     }
 }

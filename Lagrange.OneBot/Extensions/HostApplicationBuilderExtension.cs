@@ -11,7 +11,9 @@ using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
+#if !ONEBOT_DISABLE_REALM
 using Realms;
+#endif
 using JsonSerializer = System.Text.Json.JsonSerializer;
 
 namespace Lagrange.OneBot.Extensions;
@@ -79,6 +81,7 @@ public static class HostApplicationBuilderExtension
     public static HostApplicationBuilder ConfigureOneBot(this HostApplicationBuilder builder)
     {
         builder.Services.AddOptions()
+#if !ONEBOT_DISABLE_REALM
             .AddSingleton(services => // Realm Configuration
             {
                 var logger = services.GetRequiredService<ILogger<RealmConfiguration>>();
@@ -109,6 +112,9 @@ public static class HostApplicationBuilderExtension
                 };
             })
             .AddSingleton<RealmHelper>()
+#else
+            .AddSingleton(_ => new RealmHelper())
+#endif
 
             // // OneBot Netword Service
             .AddSingleton<LagrangeWebSvcCollection>()

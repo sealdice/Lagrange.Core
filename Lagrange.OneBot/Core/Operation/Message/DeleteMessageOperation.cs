@@ -11,13 +11,20 @@ using Lagrange.OneBot.Utility;
 namespace Lagrange.OneBot.Core.Operation.Message;
 
 [Operation("delete_msg")]
-public class DeleteMessageOperation(RealmHelper realm) : IOperation
+public class DeleteMessageOperation(RealmHelper? realm = null) : IOperation
 {
+#if !ONEBOT_DISABLE_REALM
+    private readonly RealmHelper _realm = realm ?? throw new ArgumentNullException(nameof(realm));
+#endif
+
     public async Task<OneBotResult> HandleOperation(BotContext context, JsonNode? payload)
     {
+#if ONEBOT_DISABLE_REALM
+        return new OneBotResult(null, 1404, "realm disabled");
+#else
         if (payload.Deserialize<OneBotGetMessage>(SerializerOptions.DefaultOptions) is { } getMsg)
         {
-            var chain = realm.Do<MessageChain>(realm => realm.All<MessageRecord>()
+            var chain = _realm.Do<MessageChain>(realm => realm.All<MessageRecord>()
                 .First(record => record.Id == getMsg.MessageId));
 
             if (chain.Type switch
@@ -30,5 +37,6 @@ public class DeleteMessageOperation(RealmHelper realm) : IOperation
         }
 
         throw new Exception();
+#endif
     }
 }

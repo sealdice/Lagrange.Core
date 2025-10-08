@@ -2,7 +2,9 @@ using Lagrange.Core.Common.Entity;
 using Lagrange.Core.Message;
 using MessagePack;
 using MessagePack.Resolvers;
+#if !ONEBOT_DISABLE_REALM
 using Realms;
+#endif
 using static Lagrange.Core.Message.MessageChain;
 
 namespace Lagrange.OneBot.Database;
@@ -26,7 +28,10 @@ namespace Lagrange.OneBot.Database;
 // MigrationCallback
 // Lagrange.OneBot/Extensions/HostApplicationBuilderExtension.cs#L92
 
-public partial class MessageRecord : IRealmObject
+public partial class MessageRecord
+#if !ONEBOT_DISABLE_REALM
+    : IRealmObject
+#endif
 {
     public static readonly MessagePackSerializerOptions OPTIONS = MessagePackSerializerOptions.Standard
         .WithResolver(CompositeResolver.Create(
@@ -34,32 +39,46 @@ public partial class MessageRecord : IRealmObject
             ContractlessStandardResolver.Instance
         ));
 
+#if !ONEBOT_DISABLE_REALM
     [PrimaryKey]
+#endif
     public int Id { get; set; }
 
+#if !ONEBOT_DISABLE_REALM
     [MapTo(nameof(Type)), Indexed]
+#endif
     public int TypeInt { get; set; }
     public MessageType Type { get => (MessageType)TypeInt; set => TypeInt = (int)value; }
 
+#if !ONEBOT_DISABLE_REALM
     [MapTo(nameof(Sequence)), Indexed]
+#endif
     public long SequenceLong { get; set; }
     public ulong Sequence { get => (ulong)SequenceLong; set => SequenceLong = (long)value; }
 
+#if !ONEBOT_DISABLE_REALM
     [MapTo(nameof(ClientSequence)), Indexed]
+#endif
     public long ClientSequenceLong { get; set; }
     public ulong ClientSequence { get => (ulong)ClientSequenceLong; set => ClientSequenceLong = (long)value; }
 
+#if !ONEBOT_DISABLE_REALM
     [MapTo(nameof(MessageId)), Indexed]
+#endif
     public long MessageIdLong { get; set; }
     public ulong MessageId { get => (ulong)MessageIdLong; set => MessageIdLong = (long)value; }
 
     public DateTimeOffset Time { get; set; }
 
+#if !ONEBOT_DISABLE_REALM
     [MapTo(nameof(FromUin)), Indexed]
+#endif
     public long FromUinLong { get; set; }
     public ulong FromUin { get => (ulong)FromUinLong; set => FromUinLong = (long)value; }
 
+#if !ONEBOT_DISABLE_REALM
     [MapTo(nameof(ToUin)), Indexed]
+#endif
     public long ToUinLong { get; set; }
     public ulong ToUin { get => (ulong)ToUinLong; set => ToUinLong = (long)value; }
 

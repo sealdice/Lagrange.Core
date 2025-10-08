@@ -19,7 +19,13 @@ public sealed class OperationService
     private readonly Dictionary<string, Type> _operations;
     private readonly ServiceProvider _service;
 
-    public OperationService(BotContext bot, ILogger<OperationService> logger, RealmHelper realm, MessageService message)
+    public OperationService(
+        BotContext bot,
+        ILogger<OperationService> logger,
+#if !ONEBOT_DISABLE_REALM
+        RealmHelper realm,
+#endif
+        MessageService message)
     {
         _bot = bot;
         _logger = logger;
@@ -33,7 +39,9 @@ public sealed class OperationService
 
         var service = new ServiceCollection();
         service.AddSingleton(bot);
+#if !ONEBOT_DISABLE_REALM
         service.AddSingleton(realm);
+#endif
         service.AddSingleton(logger);
         service.AddSingleton(message);
         service.AddSingleton<MessageCommon>();
