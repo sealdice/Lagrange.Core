@@ -13,7 +13,7 @@ namespace Lagrange.OneBot.Core.Operation.Group;
 public class SetGroupReactionOperation(RealmHelper? realm = null) : IOperation
 {
 #if !ONEBOT_DISABLE_REALM
-    private readonly RealmHelper _realm = realm ?? throw new ArgumentNullException(nameof(realm));
+    private readonly RealmHelper? _realm = realm;
 #endif
 
     public async Task<OneBotResult> HandleOperation(BotContext context, JsonNode? payload)
@@ -21,6 +21,7 @@ public class SetGroupReactionOperation(RealmHelper? realm = null) : IOperation
 #if ONEBOT_DISABLE_REALM
         return new OneBotResult(null, 1404, "realm disabled");
 #else
+        if (_realm is null) return new OneBotResult(null, 1404, "realm disabled");
         if (payload.Deserialize<OneBotSetGroupReaction>(SerializerOptions.DefaultOptions) is { } data)
         {
             var sequence = _realm.Do(realm => realm.All<MessageRecord>()

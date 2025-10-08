@@ -25,7 +25,7 @@ public sealed class MessageService
 {
     private readonly LagrangeWebSvcCollection _service;
 #if !ONEBOT_DISABLE_REALM
-    private readonly RealmHelper _realm;
+    private readonly RealmHelper? _realm;
 #endif
     private readonly IConfiguration _config;
     private readonly Dictionary<Type, List<(string Type, SegmentBase Factory)>> _entityToFactory;
@@ -42,7 +42,7 @@ public sealed class MessageService
         BotContext bot,
         LagrangeWebSvcCollection service,
 #if !ONEBOT_DISABLE_REALM
-        RealmHelper realm,
+        RealmHelper? realm = null,
 #endif
         IConfiguration config)
     {
@@ -79,7 +79,7 @@ public sealed class MessageService
     private void OnFriendMessageReceived(BotContext bot, FriendMessageEvent e)
     {
 #if !ONEBOT_DISABLE_REALM
-        _realm.Do(realm => realm.Write(() => realm.Add<MessageRecord>(e.Chain)));
+        _realm?.Do(realm => realm.Write(() => realm.Add<MessageRecord>(e.Chain)));
 #endif
 
         if (_config.GetValue<bool>("Message:IgnoreSelf") && e.Chain.FriendUin == bot.BotUin) return; // ignore self message
@@ -117,7 +117,7 @@ public sealed class MessageService
     private void OnGroupMessageReceived(BotContext bot, GroupMessageEvent e)
     {
 #if !ONEBOT_DISABLE_REALM
-        _realm.Do(realm => realm.Write(() => realm.Add<MessageRecord>(e.Chain)));
+        _realm?.Do(realm => realm.Write(() => realm.Add<MessageRecord>(e.Chain)));
 #endif
 
         if (_config.GetValue<bool>("Message:IgnoreSelf") && e.Chain.FriendUin == bot.BotUin) return; // ignore self message
@@ -141,7 +141,7 @@ public sealed class MessageService
     {
         var record = (MessageRecord)e.Chain;
 #if !ONEBOT_DISABLE_REALM
-        _realm.Do(realm => realm.Write(() => realm.Add(record)));
+        _realm?.Do(realm => realm.Write(() => realm.Add(record)));
 #endif
 
         var segments = Convert(e.Chain);

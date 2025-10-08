@@ -17,7 +17,7 @@ namespace Lagrange.OneBot.Core.Operation.Message;
 public sealed class SendMessageOperation(MessageCommon common, RealmHelper? realm = null) : IOperation
 {
 #if !ONEBOT_DISABLE_REALM
-    private readonly RealmHelper _realm = realm ?? throw new ArgumentNullException(nameof(realm));
+    private readonly RealmHelper? _realm = realm;
 #endif
 
     public async Task<OneBotResult> HandleOperation(BotContext context, JsonNode? payload)
@@ -38,7 +38,7 @@ public sealed class SendMessageOperation(MessageCommon common, RealmHelper? real
         int obid = MessageRecord.CalcMessageHash(result.MessageId, result.Sequence ?? 0);
 
 #if !ONEBOT_DISABLE_REALM
-        if (!chain.IsGroup)
+        if (!chain.IsGroup && _realm is not null)
         {
             _realm.Do(realm => realm.Write(() => realm.Add(new MessageRecord
             {

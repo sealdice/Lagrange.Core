@@ -42,7 +42,8 @@ public partial class ReplySegment : SegmentBase
     public override SegmentBase? FromEntity(MessageChain chain, IMessageEntity entity)
     {
 #if !ONEBOT_DISABLE_REALM
-        if (entity is not ForwardEntity forward || Realm is null) throw new ArgumentException("The entity is not a forward entity.");
+        if (entity is not ForwardEntity forward) throw new ArgumentException("The entity is not a forward entity.");
+        if (Realm is null) return null;
 
         int? id;
         if (chain.IsGroup)

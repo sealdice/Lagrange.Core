@@ -16,7 +16,7 @@ namespace Lagrange.OneBot.Core.Operation.Message;
 public class GetFriendMessageHistoryOperation(MessageService message, RealmHelper? realm = null) : IOperation
 {
 #if !ONEBOT_DISABLE_REALM
-    private readonly RealmHelper _realm = realm ?? throw new ArgumentNullException(nameof(realm));
+    private readonly RealmHelper? _realm = realm;
 #endif
     private readonly MessageService _message = message;
 
@@ -25,6 +25,7 @@ public class GetFriendMessageHistoryOperation(MessageService message, RealmHelpe
 #if ONEBOT_DISABLE_REALM
         return new OneBotResult(null, 1404, "realm disabled");
 #else
+        if (_realm is null) return new OneBotResult(null, 1404, "realm disabled");
         if (payload.Deserialize<OneBotFriendMsgHistory>(SerializerOptions.DefaultOptions) is { } history)
         {
             var chain = _realm.Do<MessageChain>(realm => history.MessageId == 0

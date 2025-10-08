@@ -1,5 +1,6 @@
 using System.Reflection;
 using System.Runtime;
+using System.Runtime.InteropServices;
 using System.Text;
 using Lagrange.OneBot.Extensions;
 using Microsoft.Extensions.Hosting;
@@ -10,6 +11,16 @@ internal abstract class Program
 {
     public static async Task Main(string[] args)
     {
+        // Determine Realm feature switch dynamically
+        bool isArm64 = RuntimeInformation.ProcessArchitecture == Architecture.Arm64;
+        bool? envDisableRealm = Environment.GetEnvironmentVariable("ONEBOT_DISABLE_REALM")?.ToLower() switch
+        {
+            "1" or "true" or "yes" => true,
+            "0" or "false" or "no" => false,
+            _ => null
+        };
+        Lagrange.OneBot.Utility.FeatureFlags.DisableRealm = envDisableRealm ?? isArm64;
+
         string? version = Assembly
             .GetAssembly(typeof(Program))
             ?.GetCustomAttribute<AssemblyInformationalVersionAttribute>()
@@ -19,6 +30,10 @@ internal abstract class Program
         Console.WriteLine("Lagrange.OneBot");
 
         Console.WriteLine($"Version: {version?[^40..] ?? "unknown"}\n");
+        if (Lagrange.OneBot.Utility.FeatureFlags.DisableRealm)
+        {
+            Console.WriteLine("Realm features disabled (runtime switch).");
+        }
 
         
         // AutoUpdate

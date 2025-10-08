@@ -14,7 +14,7 @@ namespace Lagrange.OneBot.Core.Operation.Message;
 public class DeleteMessageOperation(RealmHelper? realm = null) : IOperation
 {
 #if !ONEBOT_DISABLE_REALM
-    private readonly RealmHelper _realm = realm ?? throw new ArgumentNullException(nameof(realm));
+    private readonly RealmHelper? _realm = realm;
 #endif
 
     public async Task<OneBotResult> HandleOperation(BotContext context, JsonNode? payload)
@@ -22,6 +22,7 @@ public class DeleteMessageOperation(RealmHelper? realm = null) : IOperation
 #if ONEBOT_DISABLE_REALM
         return new OneBotResult(null, 1404, "realm disabled");
 #else
+        if (_realm is null) return new OneBotResult(null, 1404, "realm disabled");
         if (payload.Deserialize<OneBotGetMessage>(SerializerOptions.DefaultOptions) is { } getMsg)
         {
             var chain = _realm.Do<MessageChain>(realm => realm.All<MessageRecord>()
