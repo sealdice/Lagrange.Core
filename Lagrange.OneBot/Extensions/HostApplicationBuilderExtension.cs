@@ -80,10 +80,9 @@ public static class HostApplicationBuilderExtension
 
     public static HostApplicationBuilder ConfigureOneBot(this HostApplicationBuilder builder)
     {
-        builder.Services.AddOptions()
-#if !ONEBOT_DISABLE_REALM
-            ;
+        builder.Services.AddOptions();
 
+#if !ONEBOT_DISABLE_REALM
         if (!Lagrange.OneBot.Utility.FeatureFlags.DisableRealm)
         {
             builder.Services.AddSingleton(services => // Realm Configuration
@@ -107,9 +106,10 @@ public static class HostApplicationBuilderExtension
             builder.Services.AddSingleton<RealmHelper>();
         }
 #else
-            .AddSingleton(_ => new RealmHelper())
+        builder.Services.AddSingleton(_ => new RealmHelper());
 #endif
 
+        builder.Services
             // // OneBot Netword Service
             .AddSingleton<LagrangeWebSvcCollection>()
 

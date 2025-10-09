@@ -41,16 +41,17 @@ public sealed class MessageService
     public MessageService(
         BotContext bot,
         LagrangeWebSvcCollection service,
+        IConfiguration config
 #if !ONEBOT_DISABLE_REALM
-        RealmHelper? realm = null,
+        , RealmHelper? realm = null
 #endif
-        IConfiguration config)
+        )
     {
         _service = service;
+        _config = config;
 #if !ONEBOT_DISABLE_REALM
         _realm = realm;
 #endif
-        _config = config;
         _stringPost = config.GetValue<bool>("Message:StringPost");
 
         var invoker = bot.Invoker;

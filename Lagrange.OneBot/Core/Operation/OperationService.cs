@@ -22,10 +22,11 @@ public sealed class OperationService
     public OperationService(
         BotContext bot,
         ILogger<OperationService> logger,
+        MessageService message
 #if !ONEBOT_DISABLE_REALM
-        RealmHelper? realm = null,
+        , RealmHelper? realm = null
 #endif
-        MessageService message)
+        )
     {
         _bot = bot;
         _logger = logger;
