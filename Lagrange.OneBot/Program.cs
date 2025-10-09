@@ -12,14 +12,14 @@ internal abstract class Program
     public static async Task Main(string[] args)
     {
         // Determine Realm feature switch dynamically
-        bool isArm64 = RuntimeInformation.ProcessArchitecture == Architecture.Arm64;
+        // bool isArm64 = RuntimeInformation.ProcessArchitecture == Architecture.Arm64;
         bool? envDisableRealm = Environment.GetEnvironmentVariable("ONEBOT_DISABLE_REALM")?.ToLower() switch
         {
             "1" or "true" or "yes" => true,
             "0" or "false" or "no" => false,
             _ => null
         };
-        Lagrange.OneBot.Utility.FeatureFlags.DisableRealm = envDisableRealm ?? isArm64;
+        Lagrange.OneBot.Utility.FeatureFlags.DisableRealm = envDisableRealm ?? true; // 改为默认禁用
 
         string? version = Assembly
             .GetAssembly(typeof(Program))
