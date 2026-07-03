@@ -289,6 +289,11 @@ internal class PushMessageService : BaseService<PushMessageEvent>
                         break;
                     }
 
+                    if (TryAddGroupReactionGreyTipEvent(extraEvents, groupUin, greyTip, templates))
+                    {
+                        break;
+                    }
+
                     if (IsKnownInformationalGreyTip(greyTip))
                     {
                         break;
@@ -377,7 +382,32 @@ internal class PushMessageService : BaseService<PushMessageEvent>
         if (greyTip.Type != 20 || general == null) return false;
 
         return general is { BusiType: 1, TemplId: 10485 } || // invitation/join grey tip; real event is emitted separately
+               general is { BusiType: 1, TemplId: 10179 } || // alternate invitation/join grey tip
+               general is { BusiType: 2, TemplId: 10063 } || // privacy warning after joining a group
+               general is { BusiType: 14, TemplId: 10036 } || // group clock-in grey tip
                general is { BusiType: 16, TemplId: 10478 };  // account region/security warning grey tip
+    }
+
+    private static bool TryAddGroupReactionGreyTipEvent(List<ProtocolEvent> extraEvents, uint groupUin,
+        NotifyMessageBody greyTip, Dictionary<string, string> templates)
+    {
+        if (greyTip is not { Type: 20, GeneralGrayTip.BusiType: 4, GeneralGrayTip.TemplId: 10382 }) return false;
+
+        if (!TryGetTemplateUInt(templates, "msg_seq", out uint targetSequence)) return false;
+        if (!TryGetTemplateUInt(templates, "face_id", out uint faceId)) return false;
+
+        string operatorUin = templates.GetValueOrDefault("mqq_uin", string.Empty);
+        if (string.IsNullOrWhiteSpace(operatorUin)) operatorUin = templates.GetValueOrDefault("jp_uin", string.Empty);
+        if (string.IsNullOrWhiteSpace(operatorUin)) return false;
+
+        extraEvents.Add(GroupSysReactionEvent.Result(groupUin, targetSequence, operatorUin, true, faceId.ToString(), 1));
+        return true;
+    }
+
+    private static bool TryGetTemplateUInt(Dictionary<string, string> templates, string key, out uint value)
+    {
+        value = 0;
+        return templates.TryGetValue(key, out string? raw) && uint.TryParse(raw, out value);
     }
 
     private static bool LooksLikeGreyTip(NotifyMessageBody greyTip)

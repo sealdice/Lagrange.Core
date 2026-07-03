@@ -29,8 +29,14 @@ public partial class ReplySegment : SegmentBase
 #if !ONEBOT_DISABLE_REALM
         if (segment is ReplySegment reply && Realm is not null)
         {
-            var chain = Realm.Do<MessageChain>(realm => realm.All<MessageRecord>()
-                .First(record => record.Id == int.Parse(reply.MessageId)));
+            if (!int.TryParse(reply.MessageId, out int messageId)) return;
+
+            var chain = Realm.Do(realm =>
+            {
+                MessageRecord? record = realm.All<MessageRecord>().FirstOrDefault(record => record.Id == messageId);
+                return record == null ? null : (MessageChain)record;
+            });
+            if (chain == null) return;
 
             reply.TargetChain ??= chain;
 
