@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using System.Text.Json.Serialization;
 using Konata.Codec.Audio;
 using Konata.Codec.Audio.Codecs;
@@ -20,6 +21,8 @@ public partial class RecordSegment(string url)
 [SegmentSubscriber(typeof(RecordEntity), "record")]
 public partial class RecordSegment : SegmentBase
 {
+    private static readonly Lazy<string?> FfmpegExecutable = new(FindFfmpegExecutable);
+
     public override void Build(MessageBuilder builder, SegmentBase segment)
     {
         if (segment is RecordSegment recordSegment and not { File: "" } && CommonResolver.Resolve(recordSegment.File) is { } record)
@@ -71,28 +74,139 @@ public partial class RecordSegment : SegmentBase
             case AudioHelper.AudioFormat.Ogg:
             case AudioHelper.AudioFormat.Mp3:
                 {
-                    var input = new MemoryStream(audio);
-                    var output = new MemoryStream();
+                    if (TryConvertWithFfmpeg(audio, out var wav))
+                    {
+                        return EncodeFormat(wav, AudioHelper.AudioFormat.Wav, out audioTime);
+                    }
 
-                    var pipeline = new AudioPipeline() {
-                        format switch {
-                            AudioHelper.AudioFormat.Wav => new WavCodec.Decoder(input),
-                            AudioHelper.AudioFormat.Ogg => new VorbisCodec.Decoder(input),
-                            AudioHelper.AudioFormat.Mp3 => new Mp3Codec.Decoder(input),
-                            _ => throw new Exception("Unknown Fromat")
-                        },
-                        new AudioResampler(AudioInfo.SilkV3()),
-                        new SilkV3Codec.Encoder(),
-                        output
-                    };
-                    if (!pipeline.Start().Result) throw new Exception("Encode failed");
-
-                    audioTime = pipeline.GetAudioTime();
-                    return output.ToArray();
+                    return EncodeFormat(audio, format, out audioTime);
                 }
 
             // Cannot convert unknown type
-            default: throw new Exception("Unknown Fromat");
+            default:
+                {
+                    if (TryConvertWithFfmpeg(audio, out var wav))
+                    {
+                        return EncodeFormat(wav, AudioHelper.AudioFormat.Wav, out audioTime);
+                    }
+
+                    throw new Exception("Unknown Format");
+                }
+        }
+    }
+
+    private static byte[] EncodeFormat(byte[] audio, AudioHelper.AudioFormat format, out double audioTime)
+    {
+        if (format == AudioHelper.AudioFormat.Wav) audio = AudioHelper.NormalizeWaveForDecoder(audio);
+
+        var input = new MemoryStream(audio);
+        var output = new MemoryStream();
+
+        var pipeline = new AudioPipeline() {
+            format switch {
+                AudioHelper.AudioFormat.Wav => new WavCodec.Decoder(input),
+                AudioHelper.AudioFormat.Ogg => new VorbisCodec.Decoder(input),
+                AudioHelper.AudioFormat.Mp3 => new Mp3Codec.Decoder(input),
+                _ => throw new Exception("Unknown Format")
+            },
+            new AudioResampler(AudioInfo.SilkV3()),
+            new SilkV3Codec.Encoder(),
+            output
+        };
+        if (!pipeline.Start().Result) throw new Exception("Encode failed");
+
+        audioTime = pipeline.GetAudioTime();
+        return output.ToArray();
+    }
+
+    private static bool TryConvertWithFfmpeg(byte[] audio, out byte[] wav)
+    {
+        wav = [];
+        string? ffmpeg = FfmpegExecutable.Value;
+        if (ffmpeg == null) return false;
+
+        string tempBase = Path.Combine(Path.GetTempPath(), $"lagrange-record-{Guid.NewGuid():N}");
+        string inputPath = tempBase + ".input";
+        string outputPath = tempBase + ".wav";
+
+        try
+        {
+            System.IO.File.WriteAllBytes(inputPath, audio);
+
+            using var process = new Process();
+            process.StartInfo = new ProcessStartInfo
+            {
+                FileName = ffmpeg,
+                UseShellExecute = false,
+                RedirectStandardError = true,
+                CreateNoWindow = true
+            };
+            process.StartInfo.ArgumentList.Add("-hide_banner");
+            process.StartInfo.ArgumentList.Add("-loglevel");
+            process.StartInfo.ArgumentList.Add("error");
+            process.StartInfo.ArgumentList.Add("-y");
+            process.StartInfo.ArgumentList.Add("-i");
+            process.StartInfo.ArgumentList.Add(inputPath);
+            process.StartInfo.ArgumentList.Add("-vn");
+            process.StartInfo.ArgumentList.Add("-acodec");
+            process.StartInfo.ArgumentList.Add("pcm_s16le");
+            process.StartInfo.ArgumentList.Add("-ac");
+            process.StartInfo.ArgumentList.Add("1");
+            process.StartInfo.ArgumentList.Add("-ar");
+            process.StartInfo.ArgumentList.Add("16000");
+            process.StartInfo.ArgumentList.Add(outputPath);
+
+            process.Start();
+            string error = process.StandardError.ReadToEnd();
+            if (!process.WaitForExit(30_000))
+            {
+                process.Kill(true);
+                return false;
+            }
+
+            if (process.ExitCode != 0 || !System.IO.File.Exists(outputPath)) return false;
+
+            wav = System.IO.File.ReadAllBytes(outputPath);
+            return wav.Length > 44 && AudioHelper.DetectAudio(wav) == AudioHelper.AudioFormat.Wav;
+        }
+        catch
+        {
+            return false;
+        }
+        finally
+        {
+            TryDelete(inputPath);
+            TryDelete(outputPath);
+        }
+    }
+
+    private static string? FindFfmpegExecutable()
+    {
+        string[] names = OperatingSystem.IsWindows() ? ["ffmpeg.exe", "ffmpeg"] : ["ffmpeg"];
+        string? path = Environment.GetEnvironmentVariable("PATH");
+        if (string.IsNullOrWhiteSpace(path)) return null;
+
+        foreach (string dir in path.Split(Path.PathSeparator, StringSplitOptions.RemoveEmptyEntries))
+        {
+            foreach (string name in names)
+            {
+                string candidate = Path.Combine(dir.Trim(), name);
+                if (System.IO.File.Exists(candidate)) return candidate;
+            }
+        }
+
+        return null;
+    }
+
+    private static void TryDelete(string path)
+    {
+        try
+        {
+            if (System.IO.File.Exists(path)) System.IO.File.Delete(path);
+        }
+        catch
+        {
+            // ignore temporary file cleanup errors
         }
     }
 }
