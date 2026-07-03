@@ -294,7 +294,7 @@ internal class PushMessageService : BaseService<PushMessageEvent>
                         break;
                     }
 
-                    if (IsKnownInformationalGreyTip(greyTip))
+                    if (IsKnownInformationalGreyTip(greyTip) || IsKnownReactionGreyTip(greyTip))
                     {
                         break;
                     }
@@ -374,7 +374,13 @@ internal class PushMessageService : BaseService<PushMessageEvent>
     }
 
     private static bool IsKnownGreyTip(NotifyMessageBody greyTip)
-        => greyTip.Type is 27 or 32 || greyTip.GeneralGrayTip?.BusiType == 12 || IsKnownInformationalGreyTip(greyTip);
+        => greyTip.Type is 27 or 32 ||
+           greyTip.GeneralGrayTip?.BusiType == 12 ||
+           IsKnownReactionGreyTip(greyTip) ||
+           IsKnownInformationalGreyTip(greyTip);
+
+    private static bool IsKnownReactionGreyTip(NotifyMessageBody greyTip)
+        => greyTip is { Type: 20, GeneralGrayTip.BusiType: 4, GeneralGrayTip.TemplId: 10382 };
 
     private static bool IsKnownInformationalGreyTip(NotifyMessageBody greyTip)
     {
@@ -393,8 +399,9 @@ internal class PushMessageService : BaseService<PushMessageEvent>
     {
         if (greyTip is not { Type: 20, GeneralGrayTip.BusiType: 4, GeneralGrayTip.TemplId: 10382 }) return false;
 
-        if (!TryGetTemplateUInt(templates, "msg_seq", out uint targetSequence)) return false;
-        if (!TryGetTemplateUInt(templates, "face_id", out uint faceId)) return false;
+        string content = greyTip.GeneralGrayTip?.Content ?? string.Empty;
+        if (!TryGetGreyTipUInt(templates, content, new[] { "msg_seq", "msgseq" }, "url", "msgseq", out uint targetSequence)) return false;
+        if (!TryGetGreyTipUInt(templates, content, new[] { "face_id" }, "face", "id", out uint faceId)) return false;
 
         string operatorUin = templates.GetValueOrDefault("mqq_uin", string.Empty);
         if (string.IsNullOrWhiteSpace(operatorUin)) operatorUin = templates.GetValueOrDefault("jp_uin", string.Empty);
@@ -408,6 +415,19 @@ internal class PushMessageService : BaseService<PushMessageEvent>
     {
         value = 0;
         return templates.TryGetValue(key, out string? raw) && uint.TryParse(raw, out value);
+    }
+
+    private static bool TryGetGreyTipUInt(Dictionary<string, string> templates, string content, string[] keys,
+        string elementName, string attributeName, out uint value)
+    {
+        foreach (string key in keys)
+        {
+            if (TryGetTemplateUInt(templates, key, out value)) return true;
+        }
+
+        value = 0;
+        string? raw = ExtractElementAttribute(content, elementName, attributeName) ?? ExtractAttribute(content, attributeName);
+        return raw != null && uint.TryParse(raw, out value);
     }
 
     private static bool LooksLikeGreyTip(NotifyMessageBody greyTip)
@@ -477,6 +497,18 @@ internal class PushMessageService : BaseService<PushMessageEvent>
         start += marker.Length;
         int end = value.IndexOf('"', start);
         return end <= start ? null : value[start..end];
+    }
+
+    private static string? ExtractElementAttribute(string value, string elementName, string attributeName)
+    {
+        string tagMarker = $"<{elementName}";
+        int tagStart = value.IndexOf(tagMarker, StringComparison.OrdinalIgnoreCase);
+        if (tagStart < 0) return null;
+
+        int tagEnd = value.IndexOf('>', tagStart);
+        if (tagEnd <= tagStart) return null;
+
+        return ExtractAttribute(value[tagStart..tagEnd], attributeName);
     }
 
     private static string ExtractMqqUrl(string value)

@@ -33,10 +33,15 @@ public class SetMsgEmojiLikeOperation(RealmHelper? realm = null) : IOperation
             return new OneBotResult(null, 1, "invalid emoji_id");
         }
 
-        bool isAdd = data.Set ?? data.IsAdd ?? true;
+        if (!int.TryParse(data.MessageId, out int messageId))
+        {
+            return new OneBotResult(null, 1, "invalid message_id");
+        }
+
+        bool isAdd = ParseOptionalBoolean(data.Set) ?? ParseOptionalBoolean(data.IsAdd) ?? true;
         EmojiLikeTarget? target = _realm.Do(realm =>
         {
-            MessageRecord? record = realm.All<MessageRecord>().FirstOrDefault(record => record.Id == data.MessageId);
+            MessageRecord? record = realm.All<MessageRecord>().FirstOrDefault(record => record.Id == messageId);
             return record == null
                 ? null
                 : new EmojiLikeTarget(record.Type, record.Sequence, record.FromUin, record.ToUin);
@@ -57,6 +62,14 @@ public class SetMsgEmojiLikeOperation(RealmHelper? realm = null) : IOperation
 
 #if !ONEBOT_DISABLE_REALM
     private sealed record EmojiLikeTarget(MessageType Type, ulong Sequence, ulong FromUin, ulong ToUin);
+
+    private static bool? ParseOptionalBoolean(string? value)
+    {
+        if (string.IsNullOrWhiteSpace(value)) return null;
+        if (bool.TryParse(value, out bool result)) return result;
+        if (int.TryParse(value, out int number)) return number != 0;
+        return null;
+    }
 
     private static uint GetPeerUin(BotContext context, EmojiLikeTarget target)
     {

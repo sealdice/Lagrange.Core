@@ -123,19 +123,6 @@ public sealed class NotifyService(
         {
             logger.LogInformation(@event.ToString());
 
-            BotGroupRequest? botGroupRequest = (await bot.ContextCollection.Business.OperationLogic.FetchGroupRequests())
-                ?.AsParallel()
-                .FirstOrDefault(r =>
-                {
-                    return @event.Type switch
-                    {
-                        GroupMemberDecreaseEvent.EventType.Kick => r.EventType == BotGroupRequest.Type.KickMember
-                                                                && r.TargetMemberUin == @event.MemberUin,
-                        GroupMemberDecreaseEvent.EventType.KickMe => r.EventType == BotGroupRequest.Type.KickSelf,
-                        _ => false
-                    } && r.GroupUin == @event.GroupUin;
-                });
-
             string type = @event.Type switch
             {
                 GroupMemberDecreaseEvent.EventType.KickMe => "kick_me",
@@ -144,7 +131,27 @@ public sealed class NotifyService(
                 GroupMemberDecreaseEvent.EventType.Kick => "kick",
                 _ => @event.Type.ToString()
             };
-            await service.SendJsonAsync(new OneBotMemberDecrease(bot.BotUin, type, @event.GroupUin, botGroupRequest?.InvitorMemberUin ?? 0, @event.MemberUin));
+
+            uint operatorId = @event.OperatorUin ?? 0;
+            if (operatorId == 0 && @event.Type is GroupMemberDecreaseEvent.EventType.Kick or GroupMemberDecreaseEvent.EventType.KickMe)
+            {
+                BotGroupRequest? botGroupRequest = (await bot.ContextCollection.Business.OperationLogic.FetchGroupRequests())
+                    ?.AsParallel()
+                    .FirstOrDefault(r =>
+                    {
+                        return @event.Type switch
+                        {
+                            GroupMemberDecreaseEvent.EventType.Kick => r.EventType == BotGroupRequest.Type.KickMember
+                                                                    && r.TargetMemberUin == @event.MemberUin,
+                            GroupMemberDecreaseEvent.EventType.KickMe => r.EventType == BotGroupRequest.Type.KickSelf,
+                            _ => false
+                        } && r.GroupUin == @event.GroupUin;
+                    });
+
+                operatorId = botGroupRequest?.InvitorMemberUin ?? 0;
+            }
+
+            await service.SendJsonAsync(new OneBotMemberDecrease(bot.BotUin, type, @event.GroupUin, operatorId, @event.MemberUin));
         };
 
         bot.Invoker.OnGroupMemberMuteEvent += async (_, @event) =>
@@ -261,14 +268,13 @@ public sealed class NotifyService(
                     return;
                 }
 
-                await service.SendJsonAsync(new OneBotGroupReaction(
+                await service.SendJsonAsync(new OneBotGroupMsgEmojiLike(
                     bot.BotUin,
                     @event.TargetGroupUin,
-                    id.Value,
                     @event.OperatorUin,
-                    @event.IsAdd ? "add" : "remove",
-                    @event.Code,
-                    @event.Count
+                    id.Value,
+                    new[] { new OneBotMsgEmojiLike(@event.Code, @event.Count) },
+                    @event.IsAdd
                 ));
             };
         }
