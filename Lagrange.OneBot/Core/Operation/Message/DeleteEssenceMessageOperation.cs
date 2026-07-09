@@ -11,28 +11,19 @@ using Lagrange.OneBot.Utility;
 namespace Lagrange.OneBot.Core.Operation.Message;
 
 [Operation("delete_essence_msg")]
-public class DeleteEssenceMessageOperation(RealmHelper? realm = null) : IOperation
+public class DeleteEssenceMessageOperation(MessageRecordStore messageRecords) : IOperation
 {
-#if !ONEBOT_DISABLE_REALM
-    private readonly RealmHelper? _realm = realm;
-#endif
-
     public async Task<OneBotResult> HandleOperation(BotContext context, JsonNode? payload)
     {
-#if ONEBOT_DISABLE_REALM
-        return new OneBotResult(null, 1404, "realm disabled");
-#else
-        if (_realm is null) return new OneBotResult(null, 1404, "realm disabled");
         if (payload.Deserialize<OneBotGetMessage>(SerializerOptions.DefaultOptions) is { } getMsg)
         {
-            var chain = _realm.Do<MessageChain>(realm => realm.All<MessageRecord>()
-                .First(record => record.Id == getMsg.MessageId));
+            var chain = messageRecords.GetMessageChain(getMsg.MessageId);
+            if (chain == null) return new OneBotResult(null, 1404, "message not found");
 
             bool result = await context.RemoveEssenceMessage(chain);
             return new OneBotResult(null, result ? 0 : 1, result ? "ok" : "failed");
         }
 
         throw new Exception();
-#endif
     }
 }

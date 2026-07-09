@@ -14,12 +14,8 @@ using static Lagrange.Core.Message.MessageChain;
 namespace Lagrange.OneBot.Core.Operation.Message;
 
 [Operation("send_private_msg")]
-public sealed class SendPrivateMessageOperation(MessageCommon common, RealmHelper? realm = null) : IOperation
+public sealed class SendPrivateMessageOperation(MessageCommon common, MessageRecordStore messageRecords) : IOperation
 {
-#if !ONEBOT_DISABLE_REALM
-    private readonly RealmHelper? _realm = realm;
-#endif
-
     public async Task<OneBotResult> HandleOperation(BotContext context, JsonNode? payload)
     {
         var chain = payload.Deserialize<OneBotPrivateMessageBase>(SerializerOptions.DefaultOptions) switch
@@ -37,8 +33,7 @@ public sealed class SendPrivateMessageOperation(MessageCommon common, RealmHelpe
 
         int obid = MessageRecord.CalcMessageHash(result.MessageId, result.Sequence ?? 0);
 
-#if !ONEBOT_DISABLE_REALM
-        _realm?.Do(realm => realm.Write(() => realm.Add(new MessageRecord
+        messageRecords.Save(new MessageRecord
         {
             Id = obid,
             Type = MessageType.Friend,
@@ -49,8 +44,7 @@ public sealed class SendPrivateMessageOperation(MessageCommon common, RealmHelpe
             FromUin = context.BotUin,
             ToUin = chain.FriendUin,
             Entities = MessagePackSerializer.Serialize<List<IMessageEntity>>(chain, MessageRecord.OPTIONS)
-        })));
-#endif
+        });
 
         return new OneBotResult(new OneBotMessageResponse(obid), 0, "ok");
     }

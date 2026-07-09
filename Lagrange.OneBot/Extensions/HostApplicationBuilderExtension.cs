@@ -124,12 +124,13 @@ public static class HostApplicationBuilderExtension
             builder.Services.AddSingleton<RealmHelper>();
         }
 #else
-        builder.Services.AddSingleton(_ => new RealmHelper());
+            builder.Services.AddSingleton(_ => new RealmHelper());
 #endif
 
         builder.Services
             // // OneBot Netword Service
             .AddSingleton<LagrangeWebSvcCollection>()
+            .AddSingleton<MessageRecordStore>()
 
             .AddScoped<ILagrangeWebServiceFactory<ForwardWSService>, ForwardWSServiceFactory>()
             .AddScoped<ForwardWSService>()

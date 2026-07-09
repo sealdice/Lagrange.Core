@@ -16,11 +16,8 @@ public sealed class NotifyService(
     BotContext bot,
     ILogger<NotifyService> logger,
     LagrangeWebSvcCollection service,
-    RealmHelper? realm = null)
+    MessageRecordStore messageRecords)
 {
-#if !ONEBOT_DISABLE_REALM
-    private readonly RealmHelper? _realm = realm;
-#endif
     public void RegisterEvents()
     {
         bot.Invoker.OnGroupMessageReceived += async (_, @event) =>
@@ -174,34 +171,26 @@ public sealed class NotifyService(
             });
         };
 
-#if !ONEBOT_DISABLE_REALM
-        if (_realm is not null)
+        bot.Invoker.OnFriendRecallEvent += async (_, @event) =>
         {
-            bot.Invoker.OnFriendRecallEvent += async (_, @event) =>
+            logger.LogInformation(@event.ToString());
+
+            var sequence = messageRecords.FindFriendSequence(
+                @event.FriendUin,
+                @event.ClientSequence,
+                0x01000000UL << 32 | @event.Random);
+            if (sequence == null) {
+                logger.LogWarning("Unable to find the {} message sent by {}", @event.ClientSequence, @event.FriendUin);
+                return;
+            }
+
+            await service.SendJsonAsync(new OneBotFriendRecall(bot.BotUin)
             {
-                logger.LogInformation(@event.ToString());
-
-                var sequence = _realm.Do(realm => realm.All<MessageRecord>()
-                    .FirstOrDefault(record => record.TypeInt == (int)MessageType.Friend
-                        && record.FromUinLong == @event.FriendUin
-                        && record.ClientSequenceLong == @event.ClientSequence
-                        && record.MessageIdLong == (0x01000000L << 32 | @event.Random)
-                    )?
-                    .Sequence);
-                if (sequence == null) {
-                    logger.LogWarning("Unable to find the {} message sent by {}", @event.ClientSequence, @event.FriendUin);
-                    return;
-                }
-
-                await service.SendJsonAsync(new OneBotFriendRecall(bot.BotUin)
-                {
-                    UserId = @event.FriendUin,
-                    MessageId = MessageRecord.CalcMessageHash(@event.Random, (uint)sequence),
-                    Tip = @event.Tip
-                });
-            };
-        }
-#endif
+                UserId = @event.FriendUin,
+                MessageId = MessageRecord.CalcMessageHash(@event.Random, (uint)sequence),
+                Tip = @event.Tip
+            });
+        };
 
         bot.Invoker.OnFriendPokeEvent += async (_, @event) =>
         {
@@ -244,41 +233,31 @@ public sealed class NotifyService(
             });
         };
 
-#if !ONEBOT_DISABLE_REALM
-        if (_realm is not null)
+        bot.Invoker.OnGroupReactionEvent += async (bot, @event) =>
         {
-            bot.Invoker.OnGroupReactionEvent += async (bot, @event) =>
+            logger.LogInformation(@event.ToString());
+
+            var id = messageRecords.GetGroupMessageIdBySequence(@event.TargetGroupUin, @event.TargetSequence);
+            if (id == null)
             {
-                logger.LogInformation(@event.ToString());
-
-                var id = _realm.Do(realm => realm.All<MessageRecord>()
-                    .FirstOrDefault(record => record.TypeInt == (int)MessageType.Group
-                        && record.ToUinLong == @event.TargetGroupUin
-                        && record.SequenceLong == @event.TargetSequence)?
-                    .Id);
-
-                if (id == null)
-                {
-                    logger.LogInformation(
-                        "Unable to find the corresponding message using GroupUin: {} and Sequence: {}",
-                        @event.TargetGroupUin,
-                        @event.TargetSequence
-                    );
-
-                    return;
-                }
-
-                await service.SendJsonAsync(new OneBotGroupMsgEmojiLike(
-                    bot.BotUin,
+                logger.LogInformation(
+                    "Unable to find the corresponding message using GroupUin: {} and Sequence: {}",
                     @event.TargetGroupUin,
-                    @event.OperatorUin,
-                    id.Value,
-                    new[] { new OneBotMsgEmojiLike(@event.Code, @event.Count) },
-                    @event.IsAdd
-                ));
-            };
-        }
-#endif
+                    @event.TargetSequence
+                );
+
+                return;
+            }
+
+            await service.SendJsonAsync(new OneBotGroupMsgEmojiLike(
+                bot.BotUin,
+                @event.TargetGroupUin,
+                @event.OperatorUin,
+                id.Value,
+                new[] { new OneBotMsgEmojiLike(@event.Code, @event.Count) },
+                @event.IsAdd
+            ));
+        };
 
         bot.Invoker.OnGroupNameChangeEvent += async (bot, @event) =>
         {

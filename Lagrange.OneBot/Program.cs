@@ -102,7 +102,7 @@ internal abstract class Program
 #if ONEBOT_DISABLE_REALM
         Lagrange.OneBot.Utility.FeatureFlags.DisableRealm = true;
 #else
-        bool enableDatabase = configuration.GetValue("Database:Enable", false);
+        bool enableDatabase = configuration.GetValue("Database:Enable", true);
         bool? envDisableRealm = Environment.GetEnvironmentVariable("ONEBOT_DISABLE_REALM")?.ToLowerInvariant() switch
         {
             "1" or "true" or "yes" => true,

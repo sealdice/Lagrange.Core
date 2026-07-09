@@ -22,7 +22,8 @@ public sealed class OperationService
     public OperationService(
         BotContext bot,
         ILogger<OperationService> logger,
-        MessageService message
+        MessageService message,
+        MessageRecordStore messageRecords
 #if !ONEBOT_DISABLE_REALM
         , RealmHelper? realm = null
 #endif
@@ -48,6 +49,7 @@ public sealed class OperationService
 #endif
         service.AddSingleton(logger);
         service.AddSingleton(message);
+        service.AddSingleton(messageRecords);
         service.AddSingleton<MessageCommon>();
         service.AddSingleton<TicketService>();
         service.AddLogging();

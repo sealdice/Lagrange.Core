@@ -14,22 +14,16 @@ using Lagrange.OneBot.Utility;
 namespace Lagrange.OneBot.Core.Operation.Message;
 
 [Operation("get_msg")]
-public class GetMessageOperation(MessageService service, RealmHelper? realm = null) : IOperation
+public class GetMessageOperation(MessageService service, MessageRecordStore messageRecords) : IOperation
 {
-#if !ONEBOT_DISABLE_REALM
-    private readonly RealmHelper? _realm = realm;
-#endif
     private readonly MessageService _service = service;
 
     public async Task<OneBotResult> HandleOperation(BotContext context, JsonNode? payload)
     {
-#if ONEBOT_DISABLE_REALM
-        return new OneBotResult(null, 1404, "realm disabled");
-#else
-        if (_realm is null) return new OneBotResult(null, 1404, "realm disabled");
         if (payload.Deserialize<OneBotGetMessage>(SerializerOptions.DefaultOptions) is { } getMsg)
         {
-            var chain = _realm.Do<MessageChain>(realm => realm.All<MessageRecord>().First(record => record.Id == getMsg.MessageId));
+            var chain = messageRecords.GetMessageChain(getMsg.MessageId);
+            if (chain == null) return new OneBotResult(null, 1404, "message not found");
 
             OneBotSender sender = chain.Type switch
             {
@@ -62,6 +56,5 @@ public class GetMessageOperation(MessageService service, RealmHelper? realm = nu
         }
 
         throw new Exception();
-#endif
     }
 }

@@ -14,12 +14,8 @@ using static Lagrange.Core.Message.MessageChain;
 namespace Lagrange.OneBot.Core.Operation.Message;
 
 [Operation("send_msg")]
-public sealed class SendMessageOperation(MessageCommon common, RealmHelper? realm = null) : IOperation
+public sealed class SendMessageOperation(MessageCommon common, MessageRecordStore messageRecords) : IOperation
 {
-#if !ONEBOT_DISABLE_REALM
-    private readonly RealmHelper? _realm = realm;
-#endif
-
     public async Task<OneBotResult> HandleOperation(BotContext context, JsonNode? payload)
     {
         var chain = payload.Deserialize<OneBotMessageBase>(SerializerOptions.DefaultOptions) switch
@@ -35,25 +31,21 @@ public sealed class SendMessageOperation(MessageCommon common, RealmHelper? real
         if (result.Result != 0) return new OneBotResult(null, (int)result.Result, "failed");
         if (result.Sequence == null || result.Sequence == 0) return new OneBotResult(null, 9000, "failed");
 
-        int obid = MessageRecord.CalcMessageHash(result.MessageId, result.Sequence ?? 0);
+        ulong messageId = chain.IsGroup ? chain.MessageId : result.MessageId;
+        int obid = MessageRecord.CalcMessageHash(messageId, result.Sequence ?? 0);
 
-#if !ONEBOT_DISABLE_REALM
-        if (!chain.IsGroup && _realm is not null)
+        messageRecords.Save(new MessageRecord
         {
-            _realm.Do(realm => realm.Write(() => realm.Add(new MessageRecord
-            {
-                Id = obid,
-                Type = MessageType.Friend,
-                Sequence = result.Sequence ?? 0,
-                ClientSequence = result.ClientSequence,
-                MessageId = result.MessageId,
-                Time = DateTimeOffset.FromUnixTimeSeconds(result.Timestamp),
-                FromUin = context.BotUin,
-                ToUin = chain.FriendUin,
-                Entities = MessagePackSerializer.Serialize<List<IMessageEntity>>(chain, MessageRecord.OPTIONS)
-            })));
-        }
-#endif
+            Id = obid,
+            Type = chain.IsGroup ? MessageType.Group : MessageType.Friend,
+            Sequence = result.Sequence ?? 0,
+            ClientSequence = result.ClientSequence,
+            MessageId = messageId,
+            Time = DateTimeOffset.FromUnixTimeSeconds(result.Timestamp),
+            FromUin = context.BotUin,
+            ToUin = chain.IsGroup ? chain.GroupUin ?? 0 : chain.FriendUin,
+            Entities = MessagePackSerializer.Serialize<List<IMessageEntity>>(chain, MessageRecord.OPTIONS)
+        });
 
         return new OneBotResult(new OneBotMessageResponse(obid), 0, "ok");
     }

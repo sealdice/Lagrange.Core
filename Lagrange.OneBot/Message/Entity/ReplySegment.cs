@@ -26,16 +26,11 @@ public partial class ReplySegment : SegmentBase
 
     public override void Build(MessageBuilder builder, SegmentBase segment)
     {
-#if !ONEBOT_DISABLE_REALM
-        if (segment is ReplySegment reply && Realm is not null)
+        if (segment is ReplySegment reply && MessageRecords is not null)
         {
             if (!int.TryParse(reply.MessageId, out int messageId)) return;
 
-            var chain = Realm.Do(realm =>
-            {
-                MessageRecord? record = realm.All<MessageRecord>().FirstOrDefault(record => record.Id == messageId);
-                return record == null ? null : (MessageChain)record;
-            });
+            var chain = MessageRecords.GetMessageChain(messageId);
             if (chain == null) return;
 
             reply.TargetChain ??= chain;
@@ -46,14 +41,12 @@ public partial class ReplySegment : SegmentBase
 
             builder.Forward(reply.TargetChain);
         }
-#endif
     }
 
     public override SegmentBase? FromEntity(MessageChain chain, IMessageEntity entity)
     {
-#if !ONEBOT_DISABLE_REALM
         if (entity is not ForwardEntity forward) throw new ArgumentException("The entity is not a forward entity.");
-        if (Realm is null) return null;
+        if (MessageRecords is null) return null;
 
         int? id;
         if (chain.IsGroup)
@@ -62,15 +55,13 @@ public partial class ReplySegment : SegmentBase
         }
         else
         {
-            id = Realm.Do(realm => realm.All<MessageRecord>()
-                .FirstOrDefault(record => record.FromUinLong == chain.FriendUin
-                    && record.ClientSequenceLong == forward.ClientSequence)?
-                .Id);
+            ulong? sequence = MessageRecords.FindFriendSequence(
+                chain.FriendUin,
+                forward.ClientSequence,
+                0x01000000UL << 32 | forward.MessageId);
+            id = sequence == null ? null : MessageRecord.CalcMessageHash(forward.MessageId, (uint)sequence);
         }
 
         return new ReplySegment { MessageId = (id ?? 0).ToString() };
-#else
-        return null;
-#endif
     }
 }
