@@ -82,12 +82,6 @@ internal abstract class Program
         }
 
         var builder = Host.CreateApplicationBuilder();
-        ApplyDatabaseFeatureFlag(builder.Configuration);
-
-        if (Lagrange.OneBot.Utility.FeatureFlags.DisableRealm)
-        {
-            Console.WriteLine("Realm features disabled.");
-        }
 
         await builder
             .ConfigureLagrangeCore()
@@ -95,22 +89,5 @@ internal abstract class Program
             .Build()
             .InitializeMusicSigner() // Very ugly (
             .RunAsync();
-    }
-
-    private static void ApplyDatabaseFeatureFlag(IConfiguration configuration)
-    {
-#if ONEBOT_DISABLE_REALM
-        Lagrange.OneBot.Utility.FeatureFlags.DisableRealm = true;
-#else
-        bool enableDatabase = configuration.GetValue("Database:Enable", true);
-        bool? envDisableRealm = Environment.GetEnvironmentVariable("ONEBOT_DISABLE_REALM")?.ToLowerInvariant() switch
-        {
-            "1" or "true" or "yes" => true,
-            "0" or "false" or "no" => false,
-            _ => null
-        };
-
-        Lagrange.OneBot.Utility.FeatureFlags.DisableRealm = envDisableRealm ?? !enableDatabase;
-#endif
     }
 }

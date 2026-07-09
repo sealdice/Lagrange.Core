@@ -20,34 +20,14 @@
       <EmbeddedResource Include="Resources\appsettings.json" />
     </ItemGroup>
 
-    <PropertyGroup>
-        <DisableRealm Condition="'$(DisableRealm)' == ''">false</DisableRealm>
-    </PropertyGroup>
-
-    <PropertyGroup Condition="$([System.Text.RegularExpressions.Regex]::IsMatch('$(RuntimeIdentifier)', '^(linux-arm|linux-arm64|linux-musl-arm|linux-musl-arm64|linux-bionic-x64|linux-bionic-arm64)$'))">
-        <DisableRealm>true</DisableRealm>
-    </PropertyGroup>
-
-    <PropertyGroup Condition="'$(RuntimeIdentifiers)' != '' and $([System.Text.RegularExpressions.Regex]::IsMatch('$(RuntimeIdentifiers)', '(^|;)(linux-arm|linux-arm64|linux-musl-arm|linux-musl-arm64|linux-bionic-x64|linux-bionic-arm64)($|;)'))">
-        <DisableRealm>true</DisableRealm>
-    </PropertyGroup>
-
-    <PropertyGroup Condition="'$(DisableRealm)' == 'true'">
-        <DefineConstants>$(DefineConstants);ONEBOT_DISABLE_REALM</DefineConstants>
-        <FodyEnabled>false</FodyEnabled>
-    </PropertyGroup>
-
     <ItemGroup>
         <PackageReference Include="Konata.Codec" Version="1.4.2" />
         <PackageReference Include="MessagePack" Version="3.1.7" />
+        <PackageReference Include="Microsoft.Data.Sqlite" Version="9.0.10" />
         <PackageReference Include="Microsoft.Extensions.Hosting" Version="7.0.1" />
         <PackageReference Include="Net.Codecrete.QrCodeGenerator" Version="1.6.1" />
         <PackageReference Include="System.Drawing.Common" Version="9.0.10" />
         <PackageReference Include="System.Text.Json" Version="9.0.10" />
-    </ItemGroup>
-
-    <ItemGroup Condition="'$(DisableRealm)' != 'true'">
-        <PackageReference Include="Realm" Version="20.1.0" />
     </ItemGroup>
 
     <ItemGroup>

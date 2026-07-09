@@ -22,8 +22,20 @@ public class GetMessageOperation(MessageService service, MessageRecordStore mess
     {
         if (payload.Deserialize<OneBotGetMessage>(SerializerOptions.DefaultOptions) is { } getMsg)
         {
-            var chain = messageRecords.GetMessageChain(getMsg.MessageId);
-            if (chain == null) return new OneBotResult(null, 1404, "message not found");
+            var lookup = messageRecords.GetFullMessageChain(getMsg.MessageId);
+            if (lookup.Status == MessageContentStatus.NotFound) return new OneBotResult(null, 1404, "message not found");
+            if (lookup.Status == MessageContentStatus.ContentExpired)
+            {
+                return new OneBotResult(new JsonObject
+                {
+                    ["message_id"] = getMsg.MessageId,
+                    ["content_expired"] = true,
+                    ["error"] = "message_content_expired",
+                    ["message"] = "message content expired; action index may still be available"
+                }, 1405, "failed");
+            }
+
+            var chain = lookup.Chain!;
 
             OneBotSender sender = chain.Type switch
             {
