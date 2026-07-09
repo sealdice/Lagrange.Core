@@ -182,22 +182,24 @@ public sealed class SignServerProfile
         string OsRelease,
         string Timezone,
         string ProcCmdline,
-        int Weight);
+        int Weight,
+        string? Distro = null,
+        string? DesktopEnv = null);
 
     private static readonly EnvironmentTemplate[] EnvironmentTemplates =
     {
         new("uos-office", "ThinkCentre M720q", "Lenovo ThinkCentre M720q", "Linux 5.10.0-amd64-desktop x86_64", "Asia/Shanghai",
             "/opt/QQ/qq|--type=utility|--utility-sub-type=network.mojom.NetworkService", 18),
         new("deepin-desk", "OptiPlex 3070 Micro", "Dell OptiPlex 3070 Micro", "Linux 6.6.25-amd64-desktop-hwe x86_64", "Asia/Shanghai",
-            "/opt/QQ/qq|--type=utility|--utility-sub-type=network.mojom.NetworkService", 18),
+            "/opt/QQ/qq|--type=utility|--utility-sub-type=network.mojom.NetworkService", 18, "deepin 23", "DDE"),
         new("uos-prodesk", "ProDesk 400 G5 DM", "HP ProDesk 400 G5 Desktop Mini", "Linux 5.15.0-amd64-desktop x86_64", "Asia/Shanghai",
             "/opt/QQ/qq|--type=utility|--utility-sub-type=audio.mojom.AudioService", 16),
         new("uos-mini", "ThinkCentre M75q Gen 2", "Lenovo ThinkCentre M75q Gen 2", "Linux 5.10.0-amd64-desktop x86_64", "Asia/Shanghai",
             "/opt/QQ/qq|--type=utility|--utility-sub-type=network.mojom.NetworkService", 16),
         new("deepin-pc", "OptiPlex 7090", "Dell OptiPlex 7090", "Linux 6.6.25-amd64-desktop-hwe x86_64", "Asia/Shanghai",
-            "/opt/QQ/qq|--type=gpu-process", 14),
+            "/opt/QQ/qq|--type=gpu-process", 14, "deepin 23", "DDE"),
         new("steamdeck", "Steam Deck", "Valve Jupiter", "Linux 6.5.0-valve22-1-neptune-65 x86_64", "Asia/Shanghai",
-            "/usr/bin/qq|--type=utility|--utility-sub-type=network.mojom.NetworkService", 12),
+            "/usr/bin/qq|--type=utility|--utility-sub-type=network.mojom.NetworkService", 12, "SteamOS", "KDE"),
         new("bazzite", "ROG Ally RC71L", "ASUSTeK ROG Ally RC71L", "Linux 6.8.10-bazzite x86_64", "Asia/Shanghai",
             "/usr/lib64/qq/qq|--type=utility|--utility-sub-type=network.mojom.NetworkService", 10),
         new("legiongo", "Legion Go 8APU1", "Lenovo Legion Go 8APU1", "Linux 6.8.10-bazzite x86_64", "Asia/Shanghai",
@@ -326,7 +328,9 @@ public sealed class SignServerProfile
                 template.OsRelease,
                 template.Timezone,
                 template.ProcCmdline,
-                hostSuffix),
+                hostSuffix,
+                template.Distro,
+                template.DesktopEnv),
             SsoReportSource = SignServerSsoReportSource.FromTemplate(template.HardwareModel)
         };
     }
@@ -505,7 +509,9 @@ public sealed class SignServerProfileEnvironment
         string osRelease,
         string timezone,
         string procCmdline,
-        string hostSuffix) => new()
+        string hostSuffix,
+        string? distro = null,
+        string? desktopEnv = null) => new()
         {
             FakeHostname = $"{hostPrefix}-{hostSuffix}",
             FakeProcComm = "qq",
@@ -516,9 +522,9 @@ public sealed class SignServerProfileEnvironment
             FakeTimezone = timezone,
             Hostname = $"{hostPrefix}-{hostSuffix}",
             DeviceName = deviceName,
-            Distro = GuessDistro(osRelease),
+            Distro = distro ?? GuessDistro(osRelease),
             Kernel = osRelease.Replace("Linux ", "").Replace(" x86_64", ""),
-            DesktopEnv = GuessDesktop(osRelease),
+            DesktopEnv = desktopEnv ?? GuessDesktop(osRelease),
             SessionType = "x11",
             Vendor = SplitVendorModel(hardwareModel).Vendor,
             Model = SplitVendorModel(hardwareModel).Model,
