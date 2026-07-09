@@ -22,7 +22,7 @@ public partial class MessageCommon
 
     private readonly Dictionary<string, SegmentBase> _typeToSegment;
 
-    public MessageCommon(ILogger<MessageCommon> logger, RealmHelper? realm = null)
+    public MessageCommon(ILogger<MessageCommon> logger, MessageRecordStore messageRecords)
     {
         _logger = logger;
         _typeToSegment = new Dictionary<string, SegmentBase>();
@@ -32,7 +32,7 @@ public partial class MessageCommon
             if (type.GetCustomAttribute<SegmentSubscriberAttribute>() is { } attribute)
             {
                 var instance = (SegmentBase)type.CreateInstance(false);
-                instance.Realm = realm;
+                instance.MessageRecords = messageRecords;
                 _typeToSegment[attribute.SendType] = instance;
             }
         }

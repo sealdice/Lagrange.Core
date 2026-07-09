@@ -5,7 +5,7 @@ namespace Lagrange.OneBot.Message;
 
 public abstract class SegmentBase
 {
-    public RealmHelper? Realm { protected get; set; }
+    public MessageRecordStore? MessageRecords { protected get; set; }
     
     public abstract void Build(MessageBuilder builder, SegmentBase segment);
     

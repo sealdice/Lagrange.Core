@@ -61,14 +61,28 @@ public class LoginService(IConfiguration configuration, ILogger<LoginService> lo
             })
             .ExecuteAsync(token);
 
+        SaveKeystore();
         if (!isSucceed) throw new Exception("All login failed!");
-
-        string keystoreJson = JsonSerializer.Serialize(_lagrange.UpdateKeystore());
-        File.WriteAllText(configuration["ConfigPath:Keystore"] ?? "keystore.json", keystoreJson);
 
         _logger.LogInformation("Bot Uin: {}", _lagrange.BotUin);
 
         await _web.StartAsync(token);
+    }
+
+    private void SaveKeystore()
+    {
+        var keystore = _lagrange.UpdateKeystore();
+        if (keystore.Uin == 0 &&
+            keystore.Session.D2.Length == 0 &&
+            keystore.Session.Tgt.Length == 0 &&
+            (keystore.Session.TempPassword == null || keystore.Session.TempPassword.Length == 0))
+        {
+            _logger.LogWarning("Skip saving empty keystore");
+            return;
+        }
+
+        string keystoreJson = JsonSerializer.Serialize(keystore);
+        File.WriteAllText(configuration["ConfigPath:Keystore"] ?? "keystore.json", keystoreJson);
     }
 
     private void BotLogHandler(BotContext context, BotLogEvent e)
@@ -87,6 +101,7 @@ public class LoginService(IConfiguration configuration, ILogger<LoginService> lo
     public Task StopAsync(CancellationToken token)
     {
         _lagrange.Invoker.OnBotLogEvent -= BotLogHandler;
+        SaveKeystore();
         _lagrange.Dispose();
 
         return Task.CompletedTask;

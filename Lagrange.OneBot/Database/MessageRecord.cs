@@ -2,36 +2,13 @@ using Lagrange.Core.Common.Entity;
 using Lagrange.Core.Message;
 using MessagePack;
 using MessagePack.Resolvers;
-#if !ONEBOT_DISABLE_REALM
-using Realms;
-#endif
 using static Lagrange.Core.Message.MessageChain;
 
 namespace Lagrange.OneBot.Database;
 
 #pragma warning disable CS8618
 
-// # ################################################### #
-// #                       WARNING                       #
-// # ################################################### #
-// 
-// When modifying MessageRecord, increment `SchemaVersion`.
-// Beyond adding/removing fields (Realm auto-assigns
-// defaults; complex processing requires migration logic
-// in MigrationCallback), implement migration logic in
-// `MigrationCallback` to handle all previous schema
-// versions to current version.
-// 
-// SchemaVersion
-// Lagrange.OneBot/Extensions/HostApplicationBuilderExtension.cs#L91
-// 
-// MigrationCallback
-// Lagrange.OneBot/Extensions/HostApplicationBuilderExtension.cs#L92
-
 public partial class MessageRecord
-#if !ONEBOT_DISABLE_REALM
-    : IRealmObject
-#endif
 {
     public static readonly MessagePackSerializerOptions OPTIONS = MessagePackSerializerOptions.Standard
         .WithResolver(CompositeResolver.Create(
@@ -39,46 +16,25 @@ public partial class MessageRecord
             ContractlessStandardResolver.Instance
         ));
 
-#if !ONEBOT_DISABLE_REALM
-    [PrimaryKey]
-#endif
     public int Id { get; set; }
 
-#if !ONEBOT_DISABLE_REALM
-    [MapTo(nameof(Type)), Indexed]
-#endif
     public int TypeInt { get; set; }
     public MessageType Type { get => (MessageType)TypeInt; set => TypeInt = (int)value; }
 
-#if !ONEBOT_DISABLE_REALM
-    [MapTo(nameof(Sequence)), Indexed]
-#endif
     public long SequenceLong { get; set; }
     public ulong Sequence { get => (ulong)SequenceLong; set => SequenceLong = (long)value; }
 
-#if !ONEBOT_DISABLE_REALM
-    [MapTo(nameof(ClientSequence)), Indexed]
-#endif
     public long ClientSequenceLong { get; set; }
     public ulong ClientSequence { get => (ulong)ClientSequenceLong; set => ClientSequenceLong = (long)value; }
 
-#if !ONEBOT_DISABLE_REALM
-    [MapTo(nameof(MessageId)), Indexed]
-#endif
     public long MessageIdLong { get; set; }
     public ulong MessageId { get => (ulong)MessageIdLong; set => MessageIdLong = (long)value; }
 
     public DateTimeOffset Time { get; set; }
 
-#if !ONEBOT_DISABLE_REALM
-    [MapTo(nameof(FromUin)), Indexed]
-#endif
     public long FromUinLong { get; set; }
     public ulong FromUin { get => (ulong)FromUinLong; set => FromUinLong = (long)value; }
 
-#if !ONEBOT_DISABLE_REALM
-    [MapTo(nameof(ToUin)), Indexed]
-#endif
     public long ToUinLong { get; set; }
     public ulong ToUin { get => (ulong)ToUinLong; set => ToUinLong = (long)value; }
 
@@ -143,7 +99,9 @@ public partial class MessageRecord
             _ => throw new NotSupportedException(),
         };
 
-        var entities = MessagePackSerializer.Deserialize<List<IMessageEntity>>(record.Entities, OPTIONS);
+        var entities = record.Entities.Length == 0
+            ? []
+            : MessagePackSerializer.Deserialize<List<IMessageEntity>>(record.Entities, OPTIONS);
         chain.AddRange(entities);
 
         chain.Time = record.Time.DateTime;

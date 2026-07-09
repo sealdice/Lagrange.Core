@@ -10,23 +10,14 @@ using Lagrange.OneBot.Utility;
 namespace Lagrange.OneBot.Core.Operation.Group;
 
 [Operation("set_group_reaction")]
-public class SetGroupReactionOperation(RealmHelper? realm = null) : IOperation
+public class SetGroupReactionOperation(MessageRecordStore messageRecords) : IOperation
 {
-#if !ONEBOT_DISABLE_REALM
-    private readonly RealmHelper? _realm = realm;
-#endif
-
     public async Task<OneBotResult> HandleOperation(BotContext context, JsonNode? payload)
     {
-#if ONEBOT_DISABLE_REALM
-        return new OneBotResult(null, 1404, "realm disabled");
-#else
-        if (_realm is null) return new OneBotResult(null, 1404, "realm disabled");
         if (payload.Deserialize<OneBotSetGroupReaction>(SerializerOptions.DefaultOptions) is { } data)
         {
-            var sequence = _realm.Do(realm => realm.All<MessageRecord>()
-                .First(record => record.Id == data.MessageId)
-                .Sequence);
+            var sequence = messageRecords.GetSequence(data.MessageId);
+            if (sequence == null) return new OneBotResult(null, 1404, "message not found");
 
             bool result = await context.GroupSetMessageReaction(
                 data.GroupId,
@@ -38,6 +29,5 @@ public class SetGroupReactionOperation(RealmHelper? realm = null) : IOperation
         }
 
         throw new Exception();
-#endif
     }
 }

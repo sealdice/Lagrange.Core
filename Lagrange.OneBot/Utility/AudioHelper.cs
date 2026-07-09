@@ -27,14 +27,11 @@ public static class AudioHelper
         return (type = DetectAudio(data)) != AudioFormat.Unknown;
     }
 
-    // WAV
-    //  R  I  F  F              W  A  V  E  f  m  t
-    // +--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+
-    // |52|49|46|46|  |  |  |  |57|41|56|45|66|6D|74|
-    // +--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+
-    // 0           4           8           12       15
-    private const ulong WAV_HEAD_LOWER = 0x5249464600000000UL;
-    private const ulong WAV_HEAD_UPPER = 0x57415645666D7400UL;
+    private const uint RIFF_HEAD = 0x52494646U;
+    private const uint RF64_HEAD = 0x52463634U;
+    private const uint WAVE_HEAD = 0x57415645U;
+    private const uint FMT_CHUNK = 0x666D7420U;
+    private const uint DATA_CHUNK = 0x64617461U;
 
     // TENSILKV3
     //     #  !  S  I  L  K
@@ -108,12 +105,11 @@ public static class AudioHelper
     /// <returns></returns>
     public static AudioFormat DetectAudio(byte[] data)
     {
-        ulong lower = BinaryPrimitives.ReadUInt64BigEndian(data.AsSpan(0, sizeof(ulong)));
-        ulong upper = BinaryPrimitives.ReadUInt64BigEndian(data.AsSpan(8, sizeof(ulong)));
+        if (data.Length < sizeof(ulong)) return AudioFormat.Unknown;
 
-        if ((lower & WAV_HEAD_LOWER) == WAV_HEAD_LOWER &&
-            (upper & WAV_HEAD_UPPER) == WAV_HEAD_UPPER
-        ) return AudioFormat.Wav;
+        if (IsWaveFile(data)) return AudioFormat.Wav;
+
+        ulong lower = BinaryPrimitives.ReadUInt64BigEndian(data.AsSpan(0, sizeof(ulong)));
 
         if ((lower & TENSILKV3_HEAD_LOWER) == TENSILKV3_HEAD_LOWER) return AudioFormat.TenSilkV3;
 
@@ -133,6 +129,79 @@ public static class AudioHelper
 
         return AudioFormat.Unknown;
     }
+
+    private static bool IsWaveFile(byte[] data)
+    {
+        if (data.Length < 12) return false;
+
+        uint riff = BinaryPrimitives.ReadUInt32BigEndian(data.AsSpan(0, sizeof(uint)));
+        uint formType = BinaryPrimitives.ReadUInt32BigEndian(data.AsSpan(8, sizeof(uint)));
+        if (riff is not (RIFF_HEAD or RF64_HEAD) || formType != WAVE_HEAD) return false;
+
+        for (int offset = 12; offset + 8 <= data.Length;)
+        {
+            uint chunkId = BinaryPrimitives.ReadUInt32BigEndian(data.AsSpan(offset, sizeof(uint)));
+            uint chunkSize = BinaryPrimitives.ReadUInt32LittleEndian(data.AsSpan(offset + 4, sizeof(uint)));
+            if (chunkId == FMT_CHUNK) return true;
+
+            long nextOffset = (long)offset + 8 + chunkSize + (chunkSize & 1);
+            if (nextOffset <= offset || nextOffset > data.Length) return false;
+            offset = (int)nextOffset;
+        }
+
+        return false;
+    }
+
+    public static byte[] NormalizeWaveForDecoder(byte[] data)
+    {
+        if (!IsWaveFile(data)) return data;
+        if (!TryFindWaveChunk(data, FMT_CHUNK, out int fmtOffset, out uint fmtSize)) return data;
+        if (!TryFindWaveChunk(data, DATA_CHUNK, out int dataOffset, out uint dataSize)) return data;
+        if (fmtSize == uint.MaxValue || dataSize == uint.MaxValue) return data;
+        if (fmtSize > int.MaxValue - 9 || dataSize > int.MaxValue - 9) return data;
+        if (fmtOffset == 12) return data;
+
+        int fmtLength = GetWaveChunkLength(fmtSize);
+        int dataLength = GetWaveChunkLength(dataSize);
+        if (fmtOffset + fmtLength > data.Length || dataOffset + dataLength > data.Length) return data;
+        long normalizedLength = 12L + fmtLength + dataLength;
+        if (normalizedLength > int.MaxValue) return data;
+
+        var normalized = new byte[(int)normalizedLength];
+        BinaryPrimitives.WriteUInt32BigEndian(normalized.AsSpan(0, sizeof(uint)), RIFF_HEAD);
+        BinaryPrimitives.WriteUInt32LittleEndian(normalized.AsSpan(4, sizeof(uint)), (uint)(normalized.Length - 8));
+        BinaryPrimitives.WriteUInt32BigEndian(normalized.AsSpan(8, sizeof(uint)), WAVE_HEAD);
+        data.AsSpan(fmtOffset, fmtLength).CopyTo(normalized.AsSpan(12));
+        data.AsSpan(dataOffset, dataLength).CopyTo(normalized.AsSpan(12 + fmtLength));
+
+        return normalized;
+    }
+
+    private static bool TryFindWaveChunk(byte[] data, uint targetChunk, out int chunkOffset, out uint chunkSize)
+    {
+        chunkOffset = 0;
+        chunkSize = 0;
+
+        for (int offset = 12; offset + 8 <= data.Length;)
+        {
+            uint chunkId = BinaryPrimitives.ReadUInt32BigEndian(data.AsSpan(offset, sizeof(uint)));
+            chunkSize = BinaryPrimitives.ReadUInt32LittleEndian(data.AsSpan(offset + 4, sizeof(uint)));
+            if (chunkId == targetChunk)
+            {
+                chunkOffset = offset;
+                return true;
+            }
+
+            if (chunkSize > int.MaxValue - 9) return false;
+            long nextOffset = (long)offset + GetWaveChunkLength(chunkSize);
+            if (nextOffset <= offset || nextOffset > data.Length) return false;
+            offset = (int)nextOffset;
+        }
+
+        return false;
+    }
+
+    private static int GetWaveChunkLength(uint chunkSize) => checked((int)(8 + chunkSize + (chunkSize & 1)));
 
     private static readonly byte[] _silk_end = [0xFF, 0xFF];
 

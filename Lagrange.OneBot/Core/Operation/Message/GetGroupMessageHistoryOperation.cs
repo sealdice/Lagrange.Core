@@ -12,33 +12,19 @@ using Lagrange.OneBot.Utility;
 namespace Lagrange.OneBot.Core.Operation.Message;
 
 [Operation("get_group_msg_history")]
-public class GetGroupMessageHistoryOperation(MessageService message, RealmHelper? realm = null) : IOperation
+public class GetGroupMessageHistoryOperation(MessageService message, MessageRecordStore messageRecords) : IOperation
 {
-#if !ONEBOT_DISABLE_REALM
-    private readonly RealmHelper? _realm = realm;
-#endif
     private readonly MessageService _message = message;
 
     public async Task<OneBotResult> HandleOperation(BotContext context, JsonNode? payload)
     {
-#if ONEBOT_DISABLE_REALM
-        return new OneBotResult(null, 1404, "realm disabled");
-#else
-        if (_realm is null) return new OneBotResult(null, 1404, "realm disabled");
         if (payload.Deserialize<OneBotGroupMsgHistory>(SerializerOptions.DefaultOptions) is { } history)
         {
-            var sequence = _realm.Do(realm => history.MessageId == 0
-                ? realm.All<MessageRecord>()
-                    .Where(record => record.ToUinLong == history.GroupId)
-                    .OrderByDescending(x => x.Time)
-                    .First()
-                    .Sequence
-                : realm.All<MessageRecord>()
-                    .First(record => record.Id == history.MessageId)
-                    .Sequence);
+            var sequence = messageRecords.GetGroupSequenceForHistory(history.GroupId, history.MessageId);
+            if (sequence == null) return new OneBotResult(null, 1404, "message not found");
 
-            uint start = (uint)(sequence - (ulong)history.Count + 1);
-            if (await context.GetGroupMessage(history.GroupId, start, (uint)sequence) is { } results)
+            uint start = sequence.Value > history.Count ? sequence.Value - (uint)history.Count + 1 : 0;
+            if (await context.GetGroupMessage(history.GroupId, start, sequence.Value) is { } results)
             {
                 var messages = results
                     .Select(x => _message.ConvertToGroupMsg(context.BotUin, x))
@@ -48,6 +34,5 @@ public class GetGroupMessageHistoryOperation(MessageService message, RealmHelper
         }
 
         throw new Exception();
-#endif
     }
 }

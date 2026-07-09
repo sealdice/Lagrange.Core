@@ -23,13 +23,34 @@ internal class FetchClientKeyService : BaseService<FetchClientKeyEvent>
         return true;
     }
 
-    protected override bool Parse(Span<byte> input, BotKeystore keystore, BotAppInfo appInfo, BotDeviceInfo device, 
+    protected override bool Parse(Span<byte> input, BotKeystore keystore, BotAppInfo appInfo, BotDeviceInfo device,
         out FetchClientKeyEvent output, out List<ProtocolEvent>? extraEvents)
     {
         var packet = Serializer.Deserialize<OidbSvcTrpcTcpBase<OidbSvcTrpcTcp0x102A_1Response>>(input);
+        var fetchedAt = DateTime.UtcNow;
+        string clientKey = packet.Body?.ClientKey ?? "";
+        uint expiration = packet.Body?.Expiration ?? 0;
 
-        output = FetchClientKeyEvent.Result(0, packet.Body.ClientKey);
+        keystore.Session.Oidb102AClientKey = new BotKeystore.Oidb102AClientKeyCache
+        {
+            ClientKey = clientKey,
+            RawExpiration = expiration,
+            FetchedAtUtc = fetchedAt,
+            ExpireAtUtc = ResolveExpiration(expiration, fetchedAt)
+        };
+
+        output = FetchClientKeyEvent.Result((int)packet.ErrorCode, clientKey, expiration);
         extraEvents = null;
         return true;
+    }
+
+    private static DateTime? ResolveExpiration(uint expiration, DateTime fetchedAtUtc)
+    {
+        if (expiration == 0) return fetchedAtUtc.AddMinutes(30);
+
+        long now = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
+        if (expiration > now - 86400) return DateTimeOffset.FromUnixTimeSeconds(expiration).UtcDateTime;
+
+        return fetchedAtUtc.AddSeconds(expiration);
     }
 }

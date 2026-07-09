@@ -11,9 +11,6 @@ using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
-#if !ONEBOT_DISABLE_REALM
-using Realms;
-#endif
 using JsonSerializer = System.Text.Json.JsonSerializer;
 
 namespace Lagrange.OneBot.Extensions;
@@ -22,7 +19,14 @@ public static class HostApplicationBuilderExtension
 {
     public static HostApplicationBuilder ConfigureLagrangeCore(this HostApplicationBuilder builder)
     {
+        if (builder.Configuration.GetValue("Diagnostics:EnableFileLogging", false))
+        {
+            builder.Logging.AddProvider(new DiagnosticFileLoggerProvider(
+                builder.Configuration["Diagnostics:LogDirectory"] ?? "logs"));
+        }
+
         builder.Services
+            .AddSingleton<SignServerProfileStore>()
             .AddSingleton<OneBotSigner>() // Signer
             .AddSingleton((services) => // BotConfig
             {
@@ -40,6 +44,10 @@ public static class HostApplicationBuilderExtension
                     UseIPv6Network = configuration.GetValue("Account:UseIPv6Network", false),
                     GetOptimumServer = configuration.GetValue("Account:GetOptimumServer", true),
                     AutoReLogin = configuration.GetValue("Account:AutoReLogin", true),
+                    EnableStatusRegister = configuration.GetValue("SignServer:EnableStatusRegister", false),
+                    EnableSignServerTelemetryDebug = configuration.GetValue("SignServer:EnableTelemetryDebug", false),
+                    EnableFileLogging = configuration.GetValue("Diagnostics:EnableFileLogging", false),
+                    LogDirectory = configuration["Diagnostics:LogDirectory"] ?? "logs",
                     CustomSignProvider = services.GetRequiredService<OneBotSigner>()
                 };
             })
@@ -51,9 +59,16 @@ public static class HostApplicationBuilderExtension
                 var device = File.Exists(path)
                     ? JsonSerializer.Deserialize<BotDeviceInfo>(File.ReadAllText(path)) ?? BotDeviceInfo.GenerateInfo()
                     : BotDeviceInfo.GenerateInfo();
-
-                string deviceJson = JsonSerializer.Serialize(device);
-                File.WriteAllText(path, deviceJson);
+                if (configuration.GetValue("SignServer:UseSyntheticProfile", true))
+                {
+                    device = services.GetRequiredService<SignServerProfileStore>().BuildDeviceInfo(device);
+                    services.GetRequiredService<SignServerProfileStore>().SaveDeviceInfo(device);
+                }
+                else
+                {
+                    string deviceJson = JsonSerializer.Serialize(device);
+                    File.WriteAllText(path, deviceJson);
+                }
 
                 return device;
             })
@@ -82,36 +97,10 @@ public static class HostApplicationBuilderExtension
     {
         builder.Services.AddOptions();
 
-#if !ONEBOT_DISABLE_REALM
-        if (!Lagrange.OneBot.Utility.FeatureFlags.DisableRealm)
-        {
-            builder.Services.AddSingleton(services => // Realm Configuration
-            {
-                var logger = services.GetRequiredService<ILogger<RealmConfiguration>>();
-                var configuration = services.GetRequiredService<IConfiguration>();
-                var host = services.GetRequiredService<IHost>();
-
-                string? dpath = configuration["ConfigPath:Database"];
-
-                string prefix = dpath ?? $"./lagrange-{configuration["Account:Uin"]}-db";
-                if (!Directory.Exists(prefix)) Directory.CreateDirectory(prefix);
-                string path = Path.GetFullPath(Path.Join(prefix, ".realm"));
-
-                return new RealmConfiguration(path)
-                {
-                    SchemaVersion = 2,
-                    MigrationCallback = null,
-                };
-            });
-            builder.Services.AddSingleton<RealmHelper>();
-        }
-#else
-        builder.Services.AddSingleton(_ => new RealmHelper());
-#endif
-
         builder.Services
             // // OneBot Netword Service
             .AddSingleton<LagrangeWebSvcCollection>()
+            .AddSingleton<MessageRecordStore>()
 
             .AddScoped<ILagrangeWebServiceFactory<ForwardWSService>, ForwardWSServiceFactory>()
             .AddScoped<ForwardWSService>()

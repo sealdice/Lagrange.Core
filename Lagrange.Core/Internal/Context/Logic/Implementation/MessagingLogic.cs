@@ -14,6 +14,7 @@ using Lagrange.Core.Internal.Service;
 using Lagrange.Core.Message;
 using Lagrange.Core.Message.Entity;
 using Lagrange.Core.Message.Filter;
+using Lagrange.Core.Utility.Diagnostics;
 using ProtoBuf;
 using FriendPokeEvent = Lagrange.Core.Event.EventArg.FriendPokeEvent;
 using GroupPokeEvent = Lagrange.Core.Event.EventArg.GroupPokeEvent;
@@ -38,6 +39,7 @@ namespace Lagrange.Core.Internal.Context.Logic.Implementation;
 [EventSubscribe(typeof(GroupSysPokeEvent))]
 [EventSubscribe(typeof(GroupSysReactionEvent))]
 [EventSubscribe(typeof(GroupSysNameChangeEvent))]
+[EventSubscribe(typeof(GroupSysGreyTipEvent))]
 [EventSubscribe(typeof(FriendSysRecallEvent))]
 [EventSubscribe(typeof(FriendSysRequestEvent))]
 [EventSubscribe(typeof(GroupSysMemberEnterEvent))]
@@ -181,7 +183,9 @@ internal class MessagingLogic : LogicBase
             }
             case GroupSysReactionEvent reaction:
             {
-                uint operatorUin = await Collection.Business.CachingLogic.ResolveUin(reaction.TargetGroupUin, reaction.OperatorUid) ?? 0;
+                uint operatorUin = uint.TryParse(reaction.OperatorUid, out uint parsedOperatorUin)
+                    ? parsedOperatorUin
+                    : await Collection.Business.CachingLogic.ResolveUin(reaction.TargetGroupUin, reaction.OperatorUid) ?? 0;
                 var pokeArgs = new GroupReactionEvent(reaction.TargetGroupUin, reaction.TargetSequence, operatorUin, reaction.IsAdd, reaction.Code, reaction.Count);
                 Collection.Invoker.PostEvent(pokeArgs);
                 break;
@@ -190,6 +194,13 @@ internal class MessagingLogic : LogicBase
             {
                 var pokeArgs = new GroupNameChangeEvent(nameChange.GroupUin, nameChange.Name);
                 Collection.Invoker.PostEvent(pokeArgs);
+                break;
+            }
+            case GroupSysGreyTipEvent greyTip:
+            {
+                Collection.Log.LogInfo(Tag,
+                    $"Unknown Group GreyTip: group={greyTip.GroupUin} subtype={greyTip.SubType} type={greyTip.Type} busi_type={greyTip.BusiType} templ_id={greyTip.TemplId} sequence={greyTip.MessageSequence} tips_seq_id={greyTip.TipsSeqId} detection={greyTip.Detection} error={greyTip.Error} text={greyTip.Text} url={greyTip.Url}");
+                PacketDumpWriter.DumpGreyTip(Collection.Config, greyTip);
                 break;
             }
             case FriendSysRequestEvent info:
@@ -277,6 +288,10 @@ internal class MessagingLogic : LogicBase
             }
             case LoginNotifyEvent login:
             {
+                Collection.Log.LogInfo(Tag,
+                    $"Mobile Login Notify: state={(login.StateKnown ? login.IsLogin ? "login" : "logoff" : "unknown")} tag={login.Tag} message={login.Message}");
+                if (!login.StateKnown) break;
+
                 var deviceArgs = new DeviceLoginEvent(login.IsLogin, login.AppId, login.Tag, login.Message);
                 Collection.Invoker.PostEvent(deviceArgs);
                 break;
