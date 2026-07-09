@@ -24,11 +24,11 @@
         <DisableRealm Condition="'$(DisableRealm)' == ''">false</DisableRealm>
     </PropertyGroup>
 
-    <PropertyGroup Condition="'$(RuntimeIdentifier)' == 'linux-musl-arm64'">
+    <PropertyGroup Condition="$([System.Text.RegularExpressions.Regex]::IsMatch('$(RuntimeIdentifier)', '^(linux-arm|linux-arm64|linux-musl-arm|linux-musl-arm64|linux-bionic-x64|linux-bionic-arm64)$'))">
         <DisableRealm>true</DisableRealm>
     </PropertyGroup>
 
-    <PropertyGroup Condition="'$(RuntimeIdentifiers)' != '' and $([System.Text.RegularExpressions.Regex]::IsMatch('$(RuntimeIdentifiers)', '(^|;)linux-musl-arm64($|;)'))">
+    <PropertyGroup Condition="'$(RuntimeIdentifiers)' != '' and $([System.Text.RegularExpressions.Regex]::IsMatch('$(RuntimeIdentifiers)', '(^|;)(linux-arm|linux-arm64|linux-musl-arm|linux-musl-arm64|linux-bionic-x64|linux-bionic-arm64)($|;)'))">
         <DisableRealm>true</DisableRealm>
     </PropertyGroup>
 
